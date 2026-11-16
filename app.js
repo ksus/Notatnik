@@ -12,8 +12,9 @@
     roots: [],                 // drzewo: { id, text, created, tags[], collapsed, children[] }
     settings: { ...DEFAULT_SETTINGS },
     targetId: null,            // pod którym węzłem dodajemy (null = najwyższy poziom)
-    filter: { open: false, q: '', tag: null },
+    filter: { open: false, q: '', tag: null, fav: false },
   };
+  const toastEl = document.getElementById('toast');
 
   /* ================= Pomocnicze ================= */
   const $ = (sel, root = document) => root.querySelector(sel);
@@ -43,7 +44,8 @@
     plus: '<path d="M12 5v14M5 12h14"/>',
     x: '<path d="M18 6 6 18M6 6l12 12"/>',
     search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
-    sliders: '<path d="M3 6h9M16 6h5M3 12h3M10 12h11M3 18h11M18 18h3"/><circle cx="14" cy="6" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="18" r="2"/>',
+    settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+    star: '<path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.9l-5.2 2.8 1-5.9-4.3-4.1 5.9-.8z"/>',
     chev: '<path d="m9 6 6 6-6 6"/>',
     trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
     up: '<path d="M12 19V5M6 11l6-6 6 6"/>',
@@ -54,10 +56,10 @@
     upload: '<path d="M12 16V5M7 10l5-5 5 5M5 20h14"/>',
     share: '<circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="m8.3 10.8 7.4-3.6M8.3 13.2l7.4 3.6"/>',
   };
-  const icon = (name, size = '1.25em') =>
+  const icon = (name, size = '1.25em', filled = false) =>
     h('span', {
       class: 'ico',
-      html: `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`,
+      html: `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="${filled ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`,
     });
 
   /* ----- daty ----- */
@@ -87,6 +89,34 @@
     return { text, tags: uniq(tags) };
   }
 
+  /* ----- formatowanie (etykiety markmap): **pogrubienie**, *kursywa*, ~~przekreślenie~~ (także --przekreślenie--) ----- */
+  const INLINE_SRC = '(\\*\\*\\*|\\*\\*|~~|--|\\*)(\\S(?:.*?\\S)?)\\1';
+
+  function renderInline(text, level = 0) {
+    const frag = document.createDocumentFragment();
+    const re = new RegExp(INLINE_SRC, 'g');
+    let last = 0, m;
+    while ((m = re.exec(text))) {
+      if (m.index > last) frag.append(text.slice(last, m.index));
+      const [, mark, inner] = m;
+      const content = level < 4 ? renderInline(inner, level + 1) : inner;
+      let el;
+      if (mark === '***') el = h('strong', {}, h('em', {}, content));
+      else if (mark === '**') el = h('strong', {}, content);
+      else if (mark === '*') el = h('em', {}, content);
+      else el = h('del', {}, content);
+      frag.append(el);
+      last = m.index + m[0].length;
+    }
+    if (last < text.length) frag.append(text.slice(last));
+    return frag;
+  }
+  // tekst bez znaczników (do wyszukiwania i podpisów)
+  const plain = (text) => String(text).replace(new RegExp(INLINE_SRC, 'g'), (m, mk, inner) => plain(inner));
+  // do eksportu: --x-- zamieniamy na standardowe ~~x~~
+  const toMarkmapInline = (text) => String(text).replace(new RegExp(INLINE_SRC, 'g'),
+    (m, mk, inner) => { const k = mk === '--' ? '~~' : mk; return k + toMarkmapInline(inner) + k; });
+
   /* ================= Zapis / odczyt ================= */
   function sanitizeNodes(list, depth = 0) {
     if (!Array.isArray(list) || depth > 60) return [];
@@ -101,6 +131,7 @@
         created: validIso(n.created),
         tags: Array.isArray(n.tags) ? uniq(n.tags.map(cleanTag).filter(Boolean)) : [],
         collapsed: !!n.collapsed,
+        fav: !!n.fav,
         children: sanitizeNodes(n.children, depth + 1),
       });
     }
@@ -142,7 +173,7 @@
   }
   const countNodes = (list) => list.reduce((s, n) => s + 1 + countNodes(n.children), 0);
   const makeNode = (text, tags = [], created = new Date().toISOString()) =>
-    ({ id: uid(), text, created, tags, collapsed: false, children: [] });
+    ({ id: uid(), text, created, tags, collapsed: false, fav: false, children: [] });
 
   function addNode(parentId, raw) {
     const p = parseEntry(raw, !parentId); // tagi tylko w węzłach głównych
@@ -204,7 +235,12 @@
   /* ================= Toast ================= */
   let toastTimer = 0;
   function toast(msg, { action, onAction, duration = 4000 } = {}) {
-    const t = $('#toast');
+    const t = toastEl;
+    // otwarte okno (dialog) jest nad resztą strony — toast musi być w nim, żeby był widoczny
+    const open = [...document.querySelectorAll('dialog[open]')];
+    const host = open.length ? open[open.length - 1] : $('#app');
+    if (t.parentElement !== host) host.append(t);
+    t.classList.toggle('in-dialog', open.length > 0);
     t.replaceChildren(h('span', {}, msg));
     if (action) t.append(h('button', { class: 'toast-btn', type: 'button', onclick: () => { hideToast(); onAction && onAction(); } }, action));
     t.hidden = false;
@@ -213,56 +249,60 @@
     if (duration) toastTimer = setTimeout(hideToast, duration);
   }
   function hideToast() {
-    const t = $('#toast');
+    const t = toastEl;
     t.classList.remove('show');
     setTimeout(() => { if (!t.classList.contains('show')) t.hidden = true; }, 220);
   }
 
   /* ================= Filtrowanie ================= */
-  const isFiltering = () => state.filter.open && !!(state.filter.q.trim() || state.filter.tag);
-  function selfMatch(n) {
-    const q = state.filter.q.trim().toLowerCase().replace(/^#/, '');
-    if (state.filter.tag && !n.tags.includes(state.filter.tag)) return false;
-    if (q && !(n.text.toLowerCase().includes(q) || n.tags.some((t) => t.includes(q)))) return false;
-    return true;
-  }
+  const isFiltering = () => state.filter.open && !!(state.filter.q.trim() || state.filter.tag || state.filter.fav);
+  const filterQuery = () => state.filter.q.trim().toLowerCase().replace(/^#/, '');
+  // tag i „ulubione” dotyczą notatek głównych; wyszukiwany tekst — dowolnego węzła
+  const rootPasses = (n) => (!state.filter.tag || n.tags.includes(state.filter.tag)) && (!state.filter.fav || n.fav);
+  const textMatch = (n, q) => !q || plain(n.text).toLowerCase().includes(q) || n.tags.some((t) => t.includes(q));
 
   /* ================= Render ================= */
   function render() {
     const tree = $('#tree');
     const filtering = isFiltering();
+    const q = filterQuery();
     const memo = new Map();
-    const subtreeHas = (n) => {
+    const hasMatch = (n) => {   // czy któryś potomek pasuje do wyszukiwanego tekstu
       if (memo.has(n.id)) return memo.get(n.id);
-      const r = selfMatch(n) || n.children.some(subtreeHas);
+      const r = n.children.some((c) => textMatch(c, q) || hasMatch(c));
       memo.set(n.id, r);
       return r;
     };
 
-    const build = (list, depth) => {
+    // full = przodek pasuje do filtra, więc pokazujemy całą jego gałąź
+    const build = (list, depth, full) => {
       const ul = h('ul', { class: depth ? 'children' : 'root', role: depth ? 'group' : null });
       for (const n of list) {
-        if (filtering && !subtreeHas(n)) continue;
+        const self = textMatch(n, q);
+        if (filtering) {
+          if (depth === 0 && !rootPasses(n)) continue;
+          if (!full && !self && !hasMatch(n)) continue;
+        }
         const open = filtering || !n.collapsed;
         const li = h('li', {
           class: 'node', role: 'treeitem', dataset: { id: n.id },
           'aria-expanded': n.children.length ? String(open) : null,
         });
-        li.append(buildRow(n, depth, filtering, open));
-        if (n.children.length && open) li.append(build(n.children, depth + 1));
+        li.append(buildRow(n, depth, filtering && !full && !self, open));
+        if (n.children.length && open) li.append(build(n.children, depth + 1, full || (filtering && self)));
         ul.append(li);
       }
       return ul;
     };
 
-    const list = build(state.roots, 0);
+    const list = build(state.roots, 0, false);
     tree.replaceChildren(list);
     if (!state.roots.length) {
       tree.replaceChildren(h('div', { class: 'empty' },
         h('h2', {}, 'Tu będzie Twoje drzewo myśli'),
         h('p', {}, 'Wpisz pierwszą notatkę na dole. Dodaj ', h('code', {}, '#tag'), ', aby ją otagować.'),
-        h('p', {}, h('code', {}, '-'), ' wpis · ', h('code', {}, '--'), ' podwęzeł · ', h('code', {}, '---'), ' kolejny poziom'),
-        h('p', {}, 'Przycisk ＋ przy notatce dodaje podwęzeł.')));
+        h('p', {}, 'Formatuj: ', h('code', {}, '**pogrubienie**'), ' ', h('code', {}, '*kursywa*'), ' ', h('code', {}, '~~przekreślenie~~')),
+        h('p', {}, 'Przycisk ＋ przy notatce dodaje podwęzeł, ★ oznacza ulubione.')));
     } else if (filtering && !list.children.length) {
       tree.replaceChildren(h('div', { class: 'empty' }, h('p', {}, 'Brak pasujących notatek.')));
     }
@@ -270,9 +310,8 @@
     updateComposer();
   }
 
-  function buildRow(n, depth, filtering, open) {
+  function buildRow(n, depth, ghost, open) {
     const hasKids = n.children.length > 0;
-    const ghost = filtering && !selfMatch(n);
     return h('div', { class: 'row' + (depth === 0 ? ' top' : '') + (n.id === state.targetId ? ' target' : '') + (ghost ? ' ghost' : '') },
       hasKids
         ? h('button', { class: 'toggle' + (open ? ' open' : ''), type: 'button', 'aria-label': open ? 'Zwiń' : 'Rozwiń',
@@ -284,11 +323,16 @@
         onclick: () => openNodeSheet(n.id),
         onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openNodeSheet(n.id); } },
       },
-        h('span', { class: 'text' }, n.text),
+        h('span', { class: 'text' }, renderInline(n.text)),
         h('span', { class: 'meta' },
           depth === 0 ? n.tags.map((t) => h('span', { class: 'chip' }, '#' + t)) : null,
           !open && hasKids ? h('span', { class: 'count', title: 'Ukryte podwęzły' }, '+' + countNodes(n.children)) : null,
           depth === 0 ? h('time', { datetime: n.created }, fmtDate(n.created)) : null)),
+      depth === 0
+        ? h('button', { class: 'star' + (n.fav ? ' on' : ''), type: 'button', 'aria-pressed': String(!!n.fav),
+            title: n.fav ? 'Usuń z ulubionych' : 'Dodaj do ulubionych', 'aria-label': n.fav ? 'Usuń z ulubionych' : 'Dodaj do ulubionych',
+            onclick: () => { n.fav = !n.fav; saveNotes(); render(); } }, icon('star', '1.15em', !!n.fav))
+        : null,
       h('button', { class: 'add', type: 'button', title: 'Dodaj podwęzeł', 'aria-label': 'Dodaj podwęzeł',
         onclick: () => setTarget(n.id) }, icon('plus')));
   }
@@ -299,14 +343,20 @@
     $('#btnSearch').classList.toggle('active', state.filter.open);
     if (!state.filter.open) return;
     const tags = allTags();
-    const box = $('#fTags');
-    if (!tags.length) { box.replaceChildren(h('span', { class: 'hint' }, 'Brak tagów — dopisz #tag do notatki.')); return; }
-    box.replaceChildren(...tags.map(({ tag, count }) =>
+    const chips = [
       h('button', {
-        class: 'chip' + (state.filter.tag === tag ? ' on' : ''), type: 'button',
-        'aria-pressed': String(state.filter.tag === tag),
-        onclick: () => { state.filter.tag = state.filter.tag === tag ? null : tag; render(); },
-      }, '#' + tag, h('small', {}, count))));
+        class: 'chip fav' + (state.filter.fav ? ' on' : ''), type: 'button', 'aria-pressed': String(state.filter.fav),
+        onclick: () => { state.filter.fav = !state.filter.fav; render(); },
+      }, icon('star', '.95em', true), 'Ulubione'),
+      ...tags.map(({ tag, count }) =>
+        h('button', {
+          class: 'chip' + (state.filter.tag === tag ? ' on' : ''), type: 'button',
+          'aria-pressed': String(state.filter.tag === tag),
+          onclick: () => { state.filter.tag = state.filter.tag === tag ? null : tag; render(); },
+        }, '#' + tag, h('small', {}, count))),
+    ];
+    if (!tags.length) chips.push(h('span', { class: 'hint' }, 'Brak tagów — dopisz #tag do notatki.'));
+    $('#fTags').replaceChildren(...chips);
   }
 
   function flash(id) {
@@ -325,7 +375,7 @@
     const depth = t ? t.depth + 1 : 0;
     $('#cPrefix').textContent = '-'.repeat(depth + 1);
     $('#cCtx').hidden = !t;
-    if (t) $('#cCtxText').textContent = t.node.text;
+    if (t) $('#cCtxText').textContent = plain(t.node.text);
     $('#cOut').disabled = !t;
     $('#cIn').disabled = (t ? t.node.children : state.roots).length === 0;
     $('#cInput').placeholder = t ? 'Nowy podwęzeł…' : 'Nowa notatka…';
@@ -431,6 +481,19 @@
     const tool = (ic, label, ok, fn) =>
       h('button', { class: 'tool', type: 'button', disabled: !ok, onclick: act(fn) }, icon(ic), h('span', {}, label));
 
+    // przyciski B / I / S: opakowują zaznaczenie (lub wstawiają parę znaczników) w polu treści
+    const fmtBtn = (label, title, mark, cls) =>
+      h('button', { class: 'fmt ' + cls, type: 'button', title, 'aria-label': title,
+        onmousedown: (e) => e.preventDefault(),
+        onclick: () => {
+          const el = $('#sText'); if (!el) return;
+          const a = el.selectionStart ?? el.value.length, b = el.selectionEnd ?? a;
+          const sel = el.value.slice(a, b);
+          el.setRangeText(mark + sel + mark, a, b, 'preserve');
+          const pos = sel ? b + mark.length * 2 : a + mark.length;
+          el.focus(); el.setSelectionRange(pos, pos);
+        } }, label);
+
     const addTagFromInput = () => {
       const inp = $('#sTag');
       sheetCtx.tags = uniq([...sheetCtx.tags, ...splitTags(inp.value)]);
@@ -442,10 +505,19 @@
         h('h2', {}, 'Notatka'),
         h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Zamknij', onclick: () => dlg.close() }, icon('x'))),
 
-      h('label', { class: 'field' },
-        h('span', { class: 'lbl' }, 'Treść'),
+      h('div', { class: 'field' },
+        h('label', { class: 'lbl', for: 'sText' }, 'Treść'),
         h('input', { id: 'sText', type: 'text', value: node.text, maxlength: '500', autocomplete: 'off', enterkeyhint: 'done',
-          onkeydown: (e) => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); dlg.close(); } } })),
+          onkeydown: (e) => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); dlg.close(); } } }),
+        h('div', { class: 'fmtbar', role: 'group', 'aria-label': 'Formatowanie' },
+          fmtBtn('B', 'Pogrubienie **tekst**', '**', 'fmt-b'),
+          fmtBtn('I', 'Kursywa *tekst*', '*', 'fmt-i'),
+          fmtBtn('S', 'Przekreślenie ~~tekst~~', '~~', 'fmt-s'),
+          h('span', { class: 'hint' }, '**pogrubienie**  *kursywa*  ~~przekreślenie~~'))),
+
+      isRoot ? h('button', { class: 'btn fav-toggle' + (node.fav ? ' on' : ''), type: 'button', 'aria-pressed': String(!!node.fav),
+        onclick: act((id) => { const l = locate(id); if (l) l.node.fav = !l.node.fav; }) },
+        icon('star', '1.2em', !!node.fav), node.fav ? 'W ulubionych' : 'Dodaj do ulubionych') : null,
 
       isRoot ? h('div', { class: 'field' },
         h('span', { class: 'lbl' }, 'Tagi'),
@@ -472,7 +544,7 @@
 
       h('div', { class: 'two', style: 'margin-top:.5rem' },
         h('button', { class: 'btn', type: 'button', onclick: () => exportBranch(false) }, icon('download'), isRoot ? 'Eksport notatki .md' : 'Eksport gałęzi .md'),
-        canShareFiles() ? h('button', { class: 'btn', type: 'button', onclick: () => exportBranch(true) }, icon('share'), 'Udostępnij…') : null),
+        h('button', { class: 'btn', type: 'button', onclick: () => exportBranch(true) }, icon('share'), 'Udostępnij…')),
 
       h('div', { class: 'btn-row' },
         h('button', { class: 'btn danger', type: 'button', onclick: () => deleteFromSheet() }, icon('trash'), 'Usuń'),
@@ -484,7 +556,7 @@
   function exportBranch(share) {
     commitSheet();
     const l = locate(sheetCtx.id); if (!l) return;
-    (share ? shareMd : exportMd)([l.node], l.node.text);
+    (share ? shareMd : exportMd)([l.node], plain(l.node.text));
   }
 
   async function deleteFromSheet() {
@@ -526,13 +598,14 @@
     const lines = [];
     const blank = () => { if (lines.length && lines[lines.length - 1] !== '') lines.push(''); };
     const emit = (n, depth) => {
+      const text = toMarkmapInline(n.text);
       if (depth <= 1) {
         blank();
-        lines.push('#'.repeat(depth + 1) + ' ' + n.text);
-        if (depth === 0) lines.push(`<!-- ${[exportDate(n.created), ...n.tags.map((t) => '#' + t)].join(' ')} -->`);
+        lines.push('#'.repeat(depth + 1) + ' ' + text);
+        if (depth === 0) lines.push(`<!-- ${[exportDate(n.created), ...(n.fav ? ['★'] : []), ...n.tags.map((t) => '#' + t)].join(' ')} -->`);
         lines.push('');
       } else {
-        lines.push('  '.repeat(depth - 2) + '- ' + n.text);
+        lines.push('  '.repeat(depth - 2) + '- ' + text);
       }
       n.children.forEach((c) => emit(c, depth + 1));
     };
@@ -576,7 +649,7 @@
     const dm = /(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/.exec(s);
     const tags = [];
     String(s).replace(TAG_RE, (m, pre, t) => { const c = cleanTag(t); if (c) tags.push(c); return m; });
-    return { created: dm ? toIso(dm[1], dm[2], dm[3], dm[4], dm[5]) : null, tags: uniq(tags) };
+    return { created: dm ? toIso(dm[1], dm[2], dm[3], dm[4], dm[5]) : null, tags: uniq(tags), fav: /★/.test(s) };
   }
 
   // Rozumie format markmap (# / ## / listy z wcięciami), zwykłe listy z wcięciami (-, *, +, 1.)
@@ -628,6 +701,7 @@
       } else if ((m = /^<!--(.*)-->$/.exec(line.trim())) && last && roots.includes(last)) {
         const meta = parseMeta(m[1]);
         if (meta.created) last.created = meta.created;
+        if (meta.fav) last.fav = true;
         last.tags = uniq([...last.tags, ...meta.tags]);
       }
     }
@@ -652,15 +726,28 @@
     toast('Wyeksportowano ' + countNodes(nodes) + ' wpisów do pliku .md');
   }
 
-  const canShareFiles = () => {
-    try { return !!(navigator.canShare && navigator.canShare({ files: [new File(['x'], 'a.md', { type: 'text/plain' })] })); }
-    catch (e) { return false; }
-  };
+  // Udostępnianie: plik .md → sam tekst → schowek → pobranie. Przycisk działa na każdej przeglądarce.
   async function shareMd(nodes = state.roots, title = '') {
     if (!nodes.length) { toast('Nie ma jeszcze czego udostępnić.'); return; }
-    const file = new File([toMarkdown(nodes)], fileName(title), { type: 'text/plain' });
-    try { await navigator.share({ files: [file], title: 'Notatki z MindNotes' }); }
-    catch (e) { if (e.name !== 'AbortError') toast('Nie udało się udostępnić pliku.'); }
+    const md = toMarkdown(nodes), name = fileName(title);
+    const shareTitle = title ? plain(title) : 'Notatki z MindNotes';
+    const aborted = (e) => e && e.name === 'AbortError';
+
+    if (navigator.share) {
+      for (const type of ['text/plain', 'text/markdown']) {      // 1) plik
+        try {
+          const file = new File([md], name, { type });
+          if (navigator.canShare && !navigator.canShare({ files: [file] })) continue;
+          await navigator.share({ files: [file], title: shareTitle });
+          return;
+        } catch (e) { if (aborted(e)) return; }
+      }
+      try { await navigator.share({ title: shareTitle, text: md }); return; }  // 2) sam tekst
+      catch (e) { if (aborted(e)) return; }
+    }
+    try { await navigator.clipboard.writeText(md); toast('Skopiowano treść .md do schowka'); return; }  // 3) schowek
+    catch (e) { /* idziemy dalej */ }
+    exportMd(nodes, title);                                       // 4) pobranie pliku
   }
 
   async function importFile(file) {
@@ -743,7 +830,7 @@
           h('button', { class: 'btn small', type: 'button', 'aria-label': 'Mniejsza czcionka', onclick: () => setFs(s.fontSize - 1) }, 'A−'),
           range,
           h('button', { class: 'btn small', type: 'button', 'aria-label': 'Większa czcionka', onclick: () => setFs(s.fontSize + 1) }, 'A+')),
-        h('div', { class: 'preview' }, h('span', { class: 'prefix' }, '--'), ' Przykładowy podwęzeł ', h('span', { class: 'chip' }, '#tag'))),
+        h('div', { class: 'preview' }, renderInline('Przykład: **pogrubienie**, *kursywa*, ~~przekreślenie~~'))),
 
       h('div', { class: 'section' },
         h('h3', {}, 'Drzewo'),
@@ -756,9 +843,9 @@
         h('div', { class: 'two' },
           h('button', { class: 'btn', type: 'button', onclick: () => exportMd() }, icon('download'), 'Eksport .md'),
           h('button', { class: 'btn', type: 'button', onclick: () => $('#fileIn').click() }, icon('upload'), 'Import .md')),
-        canShareFiles() ? h('div', { class: 'stack', style: 'margin-top:.5rem' },
-          h('button', { class: 'btn', type: 'button', onclick: () => shareMd() }, icon('share'), 'Udostępnij plik…')) : null,
-        h('p', { class: 'hint' }, 'Format .md jest zgodny z markmap.js.org (# notatka, ## podwęzeł, niżej lista). Pojedynczą notatkę z gałęziami wyeksportujesz w jej oknie. Import rozpoznaje też starszy format z myślnikami.'),
+        h('div', { class: 'stack', style: 'margin-top:.5rem' },
+          h('button', { class: 'btn', type: 'button', onclick: () => shareMd() }, icon('share'), 'Udostępnij…')),
+        h('p', { class: 'hint' }, 'Format .md jest zgodny z markmap.js.org (# notatka, ## podwęzeł, niżej lista; **pogrubienie**, *kursywa*, ~~przekreślenie~~). Pojedynczą notatkę z gałęziami wyeksportujesz w jej oknie. Import rozpoznaje też starszy format z myślnikami.'),
         h('p', { class: 'hint' }, 'Notatki są zapisane tylko w tej przeglądarce (na tym urządzeniu). Rób eksport od czasu do czasu — wyczyszczenie danych przeglądarki je usuwa.')),
 
       (deferredInstall || iosHint) ? h('div', { class: 'section' },
@@ -794,11 +881,11 @@
     mqDark.addEventListener && mqDark.addEventListener('change', applySettings);
 
     $('#btnSearch').append(icon('search'));
-    $('#btnSettings').append(icon('sliders'));
+    $('#btnSettings').append(icon('settings'));
     $('#btnSettings').addEventListener('click', openSettings);
     $('#btnSearch').addEventListener('click', () => {
       state.filter.open = !state.filter.open;
-      if (!state.filter.open) { state.filter.q = ''; state.filter.tag = null; $('#fInput').value = ''; }
+      if (!state.filter.open) { state.filter.q = ''; state.filter.tag = null; state.filter.fav = false; $('#fInput').value = ''; }
       render();
       if (state.filter.open) $('#fInput').focus();
     });
