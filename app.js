@@ -78,11 +78,12 @@
   const splitTags = (s) => uniq(String(s).split(/[\s,;]+/).map(cleanTag).filter(Boolean));
 
   // „Kupić mleko #zakupy” -> { text: 'Kupić mleko', tags: ['zakupy'] }
-  function parseEntry(raw) {
+  // withTags=false (podwęzły): #tag zostaje zwykłym tekstem
+  function parseEntry(raw, withTags = true) {
     const tags = [];
-    const text = String(raw)
-      .replace(TAG_RE, (m, pre, t) => { const c = cleanTag(t); if (c) tags.push(c); return pre; })
-      .replace(/\s+/g, ' ').trim();
+    let text = String(raw);
+    if (withTags) text = text.replace(TAG_RE, (m, pre, t) => { const c = cleanTag(t); if (c) tags.push(c); return pre; });
+    text = text.replace(/\s+/g, ' ').trim();
     return { text, tags: uniq(tags) };
   }
 
@@ -144,7 +145,7 @@
     ({ id: uid(), text, created, tags, collapsed: false, children: [] });
 
   function addNode(parentId, raw) {
-    const p = parseEntry(raw);
+    const p = parseEntry(raw, !parentId); // tagi tylko w węzłach głównych
     if (!p.text) return null;
     const node = makeNode(p.text, p.tags);
     let list = state.roots;
@@ -285,9 +286,9 @@
       },
         h('span', { class: 'text' }, n.text),
         h('span', { class: 'meta' },
-          n.tags.map((t) => h('span', { class: 'chip' }, '#' + t)),
+          depth === 0 ? n.tags.map((t) => h('span', { class: 'chip' }, '#' + t)) : null,
           !open && hasKids ? h('span', { class: 'count', title: 'Ukryte podwęzły' }, '+' + countNodes(n.children)) : null,
-          h('time', { datetime: n.created }, fmtDate(n.created)))),
+          depth === 0 ? h('time', { datetime: n.created }, fmtDate(n.created)) : null)),
       h('button', { class: 'add', type: 'button', title: 'Dodaj podwęzeł', 'aria-label': 'Dodaj podwęzeł',
         onclick: () => setTarget(n.id) }, icon('plus')));
   }
@@ -399,7 +400,7 @@
     const loc = locate(sheetCtx.id); if (!loc) return;
     const txt = $('#sText'), tagIn = $('#sTag');
     if (txt) {
-      const p = parseEntry(txt.value);
+      const p = parseEntry(txt.value, loc.depth === 0);
       if (p.text) loc.node.text = p.text;
       sheetCtx.tags = uniq([...sheetCtx.tags, ...p.tags]);
     }
@@ -424,7 +425,8 @@
   function renderNodeSheet() {
     const dlg = $('#sheet');
     const loc = locate(sheetCtx.id); if (!loc) { dlg.close(); return; }
-    const { node, index, list, parent } = loc;
+    const { node, index, list, parent, depth } = loc;
+    const isRoot = depth === 0; // tagi i data tylko dla węzłów głównych
     const act = (fn) => () => { commitSheet(); fn(sheetCtx.id); saveNotes(); render(); renderNodeSheet(); };
     const tool = (ic, label, ok, fn) =>
       h('button', { class: 'tool', type: 'button', disabled: !ok, onclick: act(fn) }, icon(ic), h('span', {}, label));
@@ -445,16 +447,16 @@
         h('input', { id: 'sText', type: 'text', value: node.text, maxlength: '500', autocomplete: 'off', enterkeyhint: 'done',
           onkeydown: (e) => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); dlg.close(); } } })),
 
-      h('div', { class: 'field' },
+      isRoot ? h('div', { class: 'field' },
         h('span', { class: 'lbl' }, 'Tagi'),
         h('div', { id: 'sTags', class: 'chips' }),
         h('div', { class: 'tag-add' },
           h('input', { id: 'sTag', type: 'text', placeholder: 'dodaj tag…', autocomplete: 'off', autocapitalize: 'none', enterkeyhint: 'done',
             onkeydown: (e) => { if ((e.key === 'Enter' || e.key === ',' || e.key === ' ') && !e.isComposing) { e.preventDefault(); addTagFromInput(); } } }),
           h('button', { class: 'btn small', type: 'button', onclick: addTagFromInput }, 'Dodaj')),
-        h('div', { id: 'sSuggest', class: 'chips' })),
+        h('div', { id: 'sSuggest', class: 'chips' })) : null,
 
-      h('p', { class: 'when' }, 'Utworzono: ', h('time', { datetime: node.created }, fmtDate(node.created))),
+      isRoot ? h('p', { class: 'when' }, 'Utworzono: ', h('time', { datetime: node.created }, fmtDate(node.created))) : null,
 
       h('div', { class: 'field' },
         h('span', { class: 'lbl' }, 'Struktura'),
@@ -513,8 +515,12 @@
     (function walk(list, depth) {
       for (const n of list) {
         const prefix = style === 'dashes' ? '-'.repeat(depth + 1) : '  '.repeat(depth) + '-';
-        const tags = n.tags.length ? ' ' + n.tags.map((t) => '#' + t).join(' ') : '';
-        lines.push(`${prefix} ${n.text}${tags} · ${exportDate(n.created)}`);
+        if (depth === 0) {   // tagi i data tylko przy węzłach głównych
+          const tags = n.tags.length ? ' ' + n.tags.map((t) => '#' + t).join(' ') : '';
+          lines.push(`${prefix} ${n.text}${tags} · ${exportDate(n.created)}`);
+        } else {
+          lines.push(`${prefix} ${n.text}`);
+        }
         walk(n.children, depth + 1);
       }
     })(state.roots, 0);
@@ -541,18 +547,18 @@
         created = new Date(+dm[1], +dm[2] - 1, +dm[3], +(dm[4] || 0), +(dm[5] || 0)).toISOString();
         body = body.slice(0, dm.index);
       }
-      const p = parseEntry(body);
+      while (stack.length && stack[stack.length - 1].key >= key) stack.pop();
+      const isRoot = stack.length === 0;
+      const p = parseEntry(body, isRoot); // tagi tylko w węzłach głównych
       if (!p.text) continue;
       const node = makeNode(p.text, p.tags, created || new Date().toISOString());
-
-      while (stack.length && stack[stack.length - 1].key >= key) stack.pop();
-      (stack.length ? stack[stack.length - 1].node.children : roots).push(node);
+      (isRoot ? roots : stack[stack.length - 1].node.children).push(node);
       stack.push({ key, node });
     }
     return roots;
   }
 
-  const fileName = () => { const d = new Date(); return `drzewko-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.md`; };
+  const fileName = () => { const d = new Date(); return `mindnotes-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.md`; };
 
   function exportMd() {
     if (!state.roots.length) { toast('Nie ma jeszcze czego eksportować.'); return; }
@@ -571,7 +577,7 @@
   async function shareMd() {
     if (!state.roots.length) { toast('Nie ma jeszcze czego udostępnić.'); return; }
     const file = new File([toMarkdown()], fileName(), { type: 'text/plain' });
-    try { await navigator.share({ files: [file], title: 'Notatki z Drzewka' }); }
+    try { await navigator.share({ files: [file], title: 'Notatki z MindNotes' }); }
     catch (e) { if (e.name !== 'AbortError') toast('Nie udało się udostępnić pliku.'); }
   }
 

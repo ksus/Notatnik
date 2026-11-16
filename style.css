@@ -118,7 +118,7 @@ button.chip.on { background: var(--accent); color: var(--accent-ink); }
   font-family: var(--mono); font-weight: 700; font-size: .85rem; color: var(--accent);
   white-space: pre;
 }
-.row > .prefix { margin-right: .15rem; }
+.row > .prefix { display: none; } /* myślniki ukryte w widoku drzewa (zostają strzałki > ) */
 .body {
   flex: 1; min-width: 0; padding: .22rem .4rem; border-radius: .55rem; cursor: pointer;
   display: flex; flex-direction: column;

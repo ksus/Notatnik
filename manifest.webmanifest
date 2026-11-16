@@ -1,7 +1,7 @@
 {
   "id": "./",
-  "name": "Drzewko — notatnik drzewiasty",
-  "short_name": "Drzewko",
+  "name": "MindNotes — notatnik drzewiasty",
+  "short_name": "MindNotes",
   "description": "Notatnik w formie drzewa (mapa myśli). Działa offline, zapis lokalny, eksport i import .md.",
   "lang": "pl",
   "start_url": "./",
