@@ -1,28 +1,57 @@
-const CACHE = 'notatki-v2';
-const FILES = ['./', './index.html', './manifest.json', './icon.svg'];
+/* Service worker — cache-first dla powłoki aplikacji (działa offline).
+   WAŻNE: przy każdej zmianie plików aplikacji zwiększ VERSION,
+   wtedy użytkownicy dostaną komunikat „Dostępna nowa wersja”. */
+const VERSION = 'v1';
+const CACHE = `drzewko-${VERSION}`;
+const ASSETS = [
+  './',
+  'index.html',
+  'style.css',
+  'app.js',
+  'manifest.webmanifest',
+  'icons/icon.svg',
+  'icons/icon-192.png',
+  'icons/icon-512.png',
+  'icons/maskable-512.png',
+  'icons/apple-touch-icon.png',
+];
 
-self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)));
-  self.skipWaiting();
+self.addEventListener('install', (event) => {
+  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)));
 });
 
-self.addEventListener('activate', e => {
-  e.waitUntil(
-    caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
-  );
-  self.clients.claim();
+self.addEventListener('activate', (event) => {
+  event.waitUntil((async () => {
+    for (const key of await caches.keys()) {
+      if (key.startsWith('drzewko-') && key !== CACHE) await caches.delete(key);
+    }
+    await self.clients.claim();
+  })());
 });
 
-// Najpierw sieć (żeby aktualizacje były widoczne od razu), offline z pamięci podręcznej
-self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return;
-  e.respondWith(
-    fetch(e.request, { cache: 'no-cache' })
-      .then(res => {
-        const copy = res.clone();
-        caches.open(CACHE).then(c => c.put(e.request, copy));
-        return res;
-      })
-      .catch(() => caches.match(e.request).then(hit => hit || caches.match('./index.html')))
-  );
+self.addEventListener('message', (event) => {
+  if (event.data === 'SKIP_WAITING') self.skipWaiting();
+});
+
+self.addEventListener('fetch', (event) => {
+  const req = event.request;
+  if (req.method !== 'GET') return;
+  if (new URL(req.url).origin !== self.location.origin) return;
+
+  event.respondWith((async () => {
+    const cache = await caches.open(CACHE);
+    const hit = await cache.match(req, { ignoreSearch: true });
+    if (hit) return hit;
+    try {
+      const res = await fetch(req);
+      if (res.ok) cache.put(req, res.clone());
+      return res;
+    } catch (err) {
+      if (req.mode === 'navigate') {
+        const shell = (await cache.match('index.html')) || (await cache.match('./'));
+        if (shell) return shell;
+      }
+      return Response.error();
+    }
+  })());
 });
