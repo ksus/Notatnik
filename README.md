@@ -32,18 +32,32 @@ Wszystkie ścieżki w aplikacji są względne, więc działa zarówno pod `użyt
 
 ## Format `.md`
 
-Domyślnie (po jednym myślniku więcej na każdy poziom):
+Eksport jest zgodny z [markmap.js.org](https://markmap.js.org): notatka to `#`, jej podwęzły to `##`,
+a głębsze poziomy to lista z wcięciem dwóch spacji. Tagi i data (tylko węzeł główny) są w komentarzu pod nagłówkiem,
+więc mapa ich nie wyświetla:
 
 ```
-- Projekt aplikacji #praca · 2026-11-16 08:45
--- Zadanie B #pilne #ważne · 2026-11-16 08:45
---- Szczegół B1 · 2026-11-16 08:45
-- Drugi wpis · 2026-11-16 08:46
+# Trip
+<!-- 2026-11-16 08:45 #podróże -->
+
+## Before
+
+- Book flights
+- Pack
+  - temporary 1
+  - temporary 2
+    - temporary 2.1
+
+## During
+
+- See the sights
 ```
 
-Drugi format do wyboru w Ustawieniach to klasyczne wcięcia (`  - podwęzeł`).
-Import rozpoznaje oba formaty, a także zwykłe listy markdown z wcięciami (`-`, `*`, `+`, spacje lub tabulatory).
-Brakująca data oznacza „teraz”. Przy imporcie możesz dołączyć notatki do istniejących albo je zastąpić.
+- Całość: Ustawienia → **Eksport .md**. Jedna notatka z gałęziami: dotknij notatki → **Eksport notatki / gałęzi .md**
+  (można też wyeksportować dowolne podwęzeł jako osobną mapę).
+- Import rozpoznaje format markmap, zwykłe listy markdown z wcięciami (`-`, `*`, `+`, `1.`) oraz starszy format
+  z myślnikami (`-`, `--`, `---`). Brakująca data oznacza „teraz”.
+  Przy imporcie możesz dołączyć notatki do istniejących albo je zastąpić.
 
 ## Aktualizacje
 

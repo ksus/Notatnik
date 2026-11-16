@@ -470,10 +470,21 @@
         h('button', { class: 'btn', type: 'button', onclick: () => { const id = sheetCtx.id; commitSheet(); $('#sheet').close(); setTarget(id); } }, icon('plus'), 'Podwęzeł'),
         h('button', { class: 'btn', type: 'button', onclick: () => { const p = parent ? parent.id : null; commitSheet(); $('#sheet').close(); setTarget(p); } }, icon('plus'), 'Obok')),
 
+      h('div', { class: 'two', style: 'margin-top:.5rem' },
+        h('button', { class: 'btn', type: 'button', onclick: () => exportBranch(false) }, icon('download'), isRoot ? 'Eksport notatki .md' : 'Eksport gałęzi .md'),
+        canShareFiles() ? h('button', { class: 'btn', type: 'button', onclick: () => exportBranch(true) }, icon('share'), 'Udostępnij…') : null),
+
       h('div', { class: 'btn-row' },
         h('button', { class: 'btn danger', type: 'button', onclick: () => deleteFromSheet() }, icon('trash'), 'Usuń'),
         h('button', { class: 'btn primary', type: 'button', onclick: () => dlg.close() }, 'Gotowe'))));
     renderSheetTags();
+  }
+
+  // eksport jednej notatki razem z jej podwęzłami (z arkusza notatki)
+  function exportBranch(share) {
+    commitSheet();
+    const l = locate(sheetCtx.id); if (!l) return;
+    (share ? shareMd : exportMd)([l.node], l.node.text);
   }
 
   async function deleteFromSheet() {
@@ -509,31 +520,36 @@
   }
 
   /* ================= Eksport / import Markdown ================= */
-  function toMarkdown() {
-    const style = state.settings.exportStyle;
-    const lines = ['# Notatki', ''];
-    (function walk(list, depth) {
-      for (const n of list) {
-        const prefix = style === 'dashes' ? '-'.repeat(depth + 1) : '  '.repeat(depth) + '-';
-        if (depth === 0) {   // tagi i data tylko przy węzłach głównych
-          const tags = n.tags.length ? ' ' + n.tags.map((t) => '#' + t).join(' ') : '';
-          lines.push(`${prefix} ${n.text}${tags} · ${exportDate(n.created)}`);
-        } else {
-          lines.push(`${prefix} ${n.text}`);
-        }
-        walk(n.children, depth + 1);
+  // Format zgodny z markmap.js.org: "# notatka", "## podwęzeł", głębiej listy z wcięciem 2 spacje.
+  // Tagi i data (tylko węzeł główny) trafiają do komentarza HTML pod nagłówkiem — mapa ich nie pokazuje.
+  function toMarkdown(nodes = state.roots) {
+    const lines = [];
+    const blank = () => { if (lines.length && lines[lines.length - 1] !== '') lines.push(''); };
+    const emit = (n, depth) => {
+      if (depth <= 1) {
+        blank();
+        lines.push('#'.repeat(depth + 1) + ' ' + n.text);
+        if (depth === 0) lines.push(`<!-- ${[exportDate(n.created), ...n.tags.map((t) => '#' + t)].join(' ')} -->`);
+        lines.push('');
+      } else {
+        lines.push('  '.repeat(depth - 2) + '- ' + n.text);
       }
-    })(state.roots, 0);
+      n.children.forEach((c) => emit(c, depth + 1));
+    };
+    nodes.forEach((n) => emit(n, 0));
+    while (lines.length && lines[lines.length - 1] === '') lines.pop();
     return lines.join('\n') + '\n';
   }
 
   const DATE_TAIL = /\s*·\s*(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?\s*$/;
 
-  // Rozumie zarówno „- / -- / ---”, jak i klasyczne listy z wcięciami (spacje/tabulatory, -, *, +)
-  function parseMarkdown(md) {
+  const toIso = (y, mo, d, hh, mm) => new Date(+y, +mo - 1, +d, +(hh || 0), +(mm || 0)).toISOString();
+
+  // Starszy format: „- / -- / ---” (liczba myślników = poziom)
+  function parseDashes(text) {
     const roots = [];
     const stack = [];
-    for (const line of String(md).replace(/\r\n?/g, '\n').split('\n')) {
+    for (const line of text.split('\n')) {
       const m = /^([ \t]*)(-+|\*|\+)[ \t]+(\S.*)$/.exec(line);
       if (!m) continue;
       const indent = m[1].replace(/\t/g, '    ').length;
@@ -543,10 +559,7 @@
       let body = m[3].trim();
       let created = null;
       const dm = DATE_TAIL.exec(body);
-      if (dm) {
-        created = new Date(+dm[1], +dm[2] - 1, +dm[3], +(dm[4] || 0), +(dm[5] || 0)).toISOString();
-        body = body.slice(0, dm.index);
-      }
+      if (dm) { created = toIso(dm[1], dm[2], dm[3], dm[4], dm[5]); body = body.slice(0, dm.index); }
       while (stack.length && stack[stack.length - 1].key >= key) stack.pop();
       const isRoot = stack.length === 0;
       const p = parseEntry(body, isRoot); // tagi tylko w węzłach głównych
@@ -558,25 +571,94 @@
     return roots;
   }
 
-  const fileName = () => { const d = new Date(); return `mindnotes-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.md`; };
+  // Metadane z komentarza: <!-- 2026-11-16 10:04 #tag1 #tag2 -->
+  function parseMeta(s) {
+    const dm = /(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/.exec(s);
+    const tags = [];
+    String(s).replace(TAG_RE, (m, pre, t) => { const c = cleanTag(t); if (c) tags.push(c); return m; });
+    return { created: dm ? toIso(dm[1], dm[2], dm[3], dm[4], dm[5]) : null, tags: uniq(tags) };
+  }
 
-  function exportMd() {
-    if (!state.roots.length) { toast('Nie ma jeszcze czego eksportować.'); return; }
-    const blob = new Blob([toMarkdown()], { type: 'text/markdown;charset=utf-8' });
+  // Rozumie format markmap (# / ## / listy z wcięciami), zwykłe listy z wcięciami (-, *, +, 1.)
+  // oraz starszy format z myślnikami.
+  function parseMarkdown(md) {
+    const text = String(md).replace(/\r\n?/g, '\n');
+    if (/^[ \t]*-{2,}[ \t]+\S/m.test(text)) return parseDashes(text);
+
+    const LIST = /^([ \t]*)(?:[-*+]|\d+[.)])[ \t]+(\S.*)$/;
+    const HEAD = /^(#{1,6})[ \t]+(\S.*)$/;
+    const lines = text.split('\n');
+    const roots = [];
+    const heads = [];   // { level, node } — nagłówki
+    let items = [];     // { indent, node } — elementy listy pod bieżącym nagłówkiem
+    let last = null;
+
+    const make = (raw, isRoot) => {
+      let body = raw.trim(), created = null;
+      const dm = DATE_TAIL.exec(body);
+      if (dm) { created = toIso(dm[1], dm[2], dm[3], dm[4], dm[5]); body = body.slice(0, dm.index); }
+      const p = parseEntry(body, isRoot); // tagi tylko w węzłach głównych
+      return p.text ? makeNode(p.text, p.tags, created || new Date().toISOString()) : null;
+    };
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      let m;
+      if ((m = HEAD.exec(line))) {
+        const level = m[1].length;
+        if (level === 1 && m[2].trim() === 'Notatki' && !roots.length) {
+          // nagłówek starego eksportu — pomiń, jeśli zaraz po nim jest lista
+          const next = lines.slice(i + 1).find((l) => l.trim());
+          if (next && LIST.test(next)) continue;
+        }
+        while (heads.length && heads[heads.length - 1].level >= level) heads.pop();
+        const parent = heads.length ? heads[heads.length - 1].node : null;
+        const node = make(m[2], !parent);
+        if (!node) continue;
+        (parent ? parent.children : roots).push(node);
+        heads.push({ level, node }); items = []; last = node;
+      } else if ((m = LIST.exec(line))) {
+        const indent = m[1].replace(/\t/g, '    ').length;
+        while (items.length && items[items.length - 1].indent >= indent) items.pop();
+        const parent = items.length ? items[items.length - 1].node : heads.length ? heads[heads.length - 1].node : null;
+        const node = make(m[2], !parent);
+        if (!node) continue;
+        (parent ? parent.children : roots).push(node);
+        items.push({ indent, node }); last = node;
+      } else if ((m = /^<!--(.*)-->$/.exec(line.trim())) && last && roots.includes(last)) {
+        const meta = parseMeta(m[1]);
+        if (meta.created) last.created = meta.created;
+        last.tags = uniq([...last.tags, ...meta.tags]);
+      }
+    }
+    return roots;
+  }
+
+  const slug = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ł/g, 'l').replace(/Ł/g, 'L')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+  const fileName = (title) => {
+    const d = new Date(), s = title ? slug(title) : '';
+    return `mindnotes-${s ? s + '-' : ''}${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.md`;
+  };
+
+  // nodes = cały notatnik (domyślnie) albo jedna notatka / gałąź: exportMd([węzeł], tytuł)
+  function exportMd(nodes = state.roots, title = '') {
+    if (!nodes.length) { toast('Nie ma jeszcze czego eksportować.'); return; }
+    const blob = new Blob([toMarkdown(nodes)], { type: 'text/markdown;charset=utf-8' });
     const url = URL.createObjectURL(blob);
-    const a = h('a', { href: url, download: fileName() });
+    const a = h('a', { href: url, download: fileName(title) });
     document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 4000);
-    toast('Wyeksportowano ' + countNodes(state.roots) + ' notatek do pliku .md');
+    toast('Wyeksportowano ' + countNodes(nodes) + ' wpisów do pliku .md');
   }
 
   const canShareFiles = () => {
     try { return !!(navigator.canShare && navigator.canShare({ files: [new File(['x'], 'a.md', { type: 'text/plain' })] })); }
     catch (e) { return false; }
   };
-  async function shareMd() {
-    if (!state.roots.length) { toast('Nie ma jeszcze czego udostępnić.'); return; }
-    const file = new File([toMarkdown()], fileName(), { type: 'text/plain' });
+  async function shareMd(nodes = state.roots, title = '') {
+    if (!nodes.length) { toast('Nie ma jeszcze czego udostępnić.'); return; }
+    const file = new File([toMarkdown(nodes)], fileName(title), { type: 'text/plain' });
     try { await navigator.share({ files: [file], title: 'Notatki z MindNotes' }); }
     catch (e) { if (e.name !== 'AbortError') toast('Nie udało się udostępnić pliku.'); }
   }
@@ -587,7 +669,7 @@
     catch (e) { toast('Nie udało się odczytać pliku.'); return; }
     const imported = parseMarkdown(text);
     const n = countNodes(imported);
-    if (!n) { toast('W pliku nie znaleziono wpisów (linie zaczynające się od -, -- itd.).', { duration: 6000 }); return; }
+    if (!n) { toast('W pliku nie znaleziono wpisów (nagłówki # i listy -).', { duration: 6000 }); return; }
 
     let mode = 'replace';
     if (state.roots.length) {
@@ -664,12 +746,6 @@
         h('div', { class: 'preview' }, h('span', { class: 'prefix' }, '--'), ' Przykładowy podwęzeł ', h('span', { class: 'chip' }, '#tag'))),
 
       h('div', { class: 'section' },
-        h('h3', {}, 'Format eksportu .md'),
-        segmented('exportStyle', [['dashes', '- / -- / ---'], ['indent', 'Wcięcia']], s.exportStyle,
-          (v) => { s.exportStyle = v; saveSettings(); }),
-        h('p', { class: 'hint' }, 'Import rozpoznaje oba formaty.')),
-
-      h('div', { class: 'section' },
         h('h3', {}, 'Drzewo'),
         h('div', { class: 'two' },
           h('button', { class: 'btn', type: 'button', onclick: () => { setCollapsedAll(state.roots, false); saveNotes(); render(); } }, 'Rozwiń wszystko'),
@@ -678,10 +754,11 @@
       h('div', { class: 'section' },
         h('h3', {}, 'Kopia zapasowa'),
         h('div', { class: 'two' },
-          h('button', { class: 'btn', type: 'button', onclick: exportMd }, icon('download'), 'Eksport .md'),
+          h('button', { class: 'btn', type: 'button', onclick: () => exportMd() }, icon('download'), 'Eksport .md'),
           h('button', { class: 'btn', type: 'button', onclick: () => $('#fileIn').click() }, icon('upload'), 'Import .md')),
         canShareFiles() ? h('div', { class: 'stack', style: 'margin-top:.5rem' },
-          h('button', { class: 'btn', type: 'button', onclick: shareMd }, icon('share'), 'Udostępnij plik…')) : null,
+          h('button', { class: 'btn', type: 'button', onclick: () => shareMd() }, icon('share'), 'Udostępnij plik…')) : null,
+        h('p', { class: 'hint' }, 'Format .md jest zgodny z markmap.js.org (# notatka, ## podwęzeł, niżej lista). Pojedynczą notatkę z gałęziami wyeksportujesz w jej oknie. Import rozpoznaje też starszy format z myślnikami.'),
         h('p', { class: 'hint' }, 'Notatki są zapisane tylko w tej przeglądarce (na tym urządzeniu). Rób eksport od czasu do czasu — wyczyszczenie danych przeglądarki je usuwa.')),
 
       (deferredInstall || iosHint) ? h('div', { class: 'section' },
