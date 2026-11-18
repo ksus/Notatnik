@@ -28,7 +28,7 @@ Wszystkie ścieżki w aplikacji są względne, więc działa zarówno pod `użyt
 - Tagi: wpisz `#tag` w treści (np. `Kupić mleko #zakupy`) albo dodaj je w oknie notatki.
 - Dotknięcie notatki otwiera jej okno: edycja treści i tagów, data utworzenia, przesuwanie w górę/w dół,
   wcięcie/wysunięcie, usuwanie.
-- Kolejność notatek głównych: złap ikonę ⠿ po lewej i przeciągnij (przy krawędzi ekranu lista sama się przewija). Z klawiatury: ustaw fokus na ikonie i użyj strzałek ↑ / ↓. Uchwyty są ukryte podczas wyszukiwania i filtrowania.
+- Kolejność notatek głównych: przytrzymaj palec na tytule notatki (ok. 0,4 s, telefon krótko zawibruje) i przeciągnij; przy krawędzi ekranu lista sama się przewija. Na komputerze wystarczy złapać tytuł myszą. Z klawiatury: Alt + ↑ / ↓ na wybranej notatce. Przeciąganie jest wyłączone podczas wyszukiwania i filtrowania.
 - Lupa: wyszukiwanie i filtrowanie po tagach.
 - Ustawienia: motyw (jasny / ciemny / systemowy), rozmiar czcionki, format eksportu, eksport i import.
 
