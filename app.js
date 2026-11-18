@@ -1,5 +1,5 @@
 'use strict';
-/* Drzewko — notatnik drzewiasty (PWA). Bez zależności, bez builda. */
+/* Drzewko — notatnik drzewiasty (PWA). Bez builda. Biblioteki mapy myśli (lib/) ładowane są leniwie, tylko przy eksporcie mapy. */
 (() => {
   /* ================= Stałe i stan ================= */
   const KEY_NOTES = 'drzewko.notes.v1';
@@ -546,6 +546,10 @@
         h('button', { class: 'btn', type: 'button', onclick: () => exportBranch(false) }, icon('download'), isRoot ? 'Eksport notatki .md' : 'Eksport gałęzi .md'),
         h('button', { class: 'btn', type: 'button', onclick: () => exportBranch(true) }, icon('share'), 'Udostępnij…')),
 
+      h('div', { class: 'field' },
+        h('span', { class: 'lbl' }, 'Mapa myśli (markmap)'),
+        mapButtons((f) => exportBranchMap(f))),
+
       h('div', { class: 'btn-row' },
         h('button', { class: 'btn danger', type: 'button', onclick: () => deleteFromSheet() }, icon('trash'), 'Usuń'),
         h('button', { class: 'btn primary', type: 'button', onclick: () => dlg.close() }, 'Gotowe'))));
@@ -557,6 +561,11 @@
     commitSheet();
     const l = locate(sheetCtx.id); if (!l) return;
     (share ? shareMd : exportMd)([l.node], plain(l.node.text));
+  }
+  function exportBranchMap(format) {
+    commitSheet();
+    const l = locate(sheetCtx.id); if (!l) return;
+    exportMap(format, [l.node], plain(l.node.text));
   }
 
   async function deleteFromSheet() {
@@ -710,21 +719,192 @@
 
   const slug = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ł/g, 'l').replace(/Ł/g, 'L')
     .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
-  const fileName = (title) => {
+  const fileName = (title, ext = 'md') => {
     const d = new Date(), s = title ? slug(title) : '';
-    return `mindnotes-${s ? s + '-' : ''}${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.md`;
+    return `mindnotes-${s ? s + '-' : ''}${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.${ext}`;
   };
+
+  function downloadBlob(blob, name) {
+    const url = URL.createObjectURL(blob);
+    const a = h('a', { href: url, download: name });
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  }
 
   // nodes = cały notatnik (domyślnie) albo jedna notatka / gałąź: exportMd([węzeł], tytuł)
   function exportMd(nodes = state.roots, title = '') {
     if (!nodes.length) { toast('Nie ma jeszcze czego eksportować.'); return; }
-    const blob = new Blob([toMarkdown(nodes)], { type: 'text/markdown;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = h('a', { href: url, download: fileName(title) });
-    document.body.append(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    downloadBlob(new Blob([toMarkdown(nodes)], { type: 'text/markdown;charset=utf-8' }), fileName(title));
     toast('Wyeksportowano ' + countNodes(nodes) + ' wpisów do pliku .md');
   }
+
+  /* ================= Eksport mapy myśli: SVG / PNG / HTML (markmap) ================= */
+  // Biblioteki (d3 + markmap-view) leżą w lib/ i są w cache service workera, więc działa offline.
+  // Ładujemy je dopiero przy pierwszym eksporcie mapy.
+  const MM_LIBS = ['lib/d3.min.js', 'lib/markmap-view.js'];
+  const MM_FONT = '400 16px/20px system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+  const MM_OPTS = { maxWidth: 360, spacingVertical: 6 };
+  let mmLoading = null;
+
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = src; s.onload = resolve; s.onerror = () => reject(new Error('Nie wczytano ' + src));
+      document.head.append(s);
+    });
+  }
+  function loadMarkmap() {
+    if (window.markmap && window.markmap.Markmap) return Promise.resolve();
+    if (!mmLoading) {
+      mmLoading = (async () => { for (const src of MM_LIBS) await loadScript(src); })()
+        .catch((e) => { mmLoading = null; throw e; });
+    }
+    return mmLoading;
+  }
+
+  const escHtml = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  // etykieta węzła jako HTML (markmap renderuje treść węzła jako HTML)
+  function inlineHtml(text, level = 0) {
+    const re = new RegExp(INLINE_SRC, 'g');
+    let out = '', last = 0, m;
+    while ((m = re.exec(text))) {
+      out += escHtml(text.slice(last, m.index));
+      const [, mark, inner] = m;
+      const c = level < 4 ? inlineHtml(inner, level + 1) : escHtml(inner);
+      out += mark === '***' ? `<strong><em>${c}</em></strong>`
+        : mark === '**' ? `<strong>${c}</strong>`
+        : mark === '*' ? `<em>${c}</em>`
+        : `<del>${c}</del>`;
+      last = m.index + m[0].length;
+    }
+    return out + escHtml(text.slice(last));
+  }
+  // jeden korzeń mapy: pojedyncza notatka / gałąź albo „MindNotes” z notatkami jako gałęziami
+  function toMarkmapTree(nodes, title) {
+    const conv = (n) => ({ content: inlineHtml(n.text), children: n.children.map(conv) });
+    return nodes.length === 1 ? conv(nodes[0]) : { content: escHtml(title || 'MindNotes'), children: nodes.map(conv) };
+  }
+
+  // Rysuje mapę poza ekranem i zwraca gotowy, samodzielny SVG (bez przesunięcia/zoomu, na białym tle).
+  async function renderMapSvg(tree) {
+    await loadMarkmap();
+    const NS = 'http://www.w3.org/2000/svg';
+    const host = h('div', { style: 'position:fixed;left:-99999px;top:0;width:1200px;height:800px;visibility:hidden;pointer-events:none', 'aria-hidden': 'true' });
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('width', '1200'); svg.setAttribute('height', '800');
+    host.append(svg); document.body.append(host);
+    let mm;
+    try {
+      mm = new window.markmap.Markmap(svg, {
+        ...MM_OPTS, duration: 0, zoom: false, pan: false, autoFit: false,
+        style: () => `.markmap{--markmap-font:${MM_FONT}}`,
+      });
+      await mm.setData(JSON.parse(JSON.stringify(tree)));
+      // setData wraca przed końcem przejścia d3 (węzły mają jeszcze opacity 0, linie szerokość 0) —
+      // wymuszamy dokończenie animacji i czekamy, aż wszystko będzie w stanie docelowym
+      const settled = () => [...svg.querySelectorAll('foreignObject.markmap-foreign')].every((f) => f.style.opacity !== '0')
+        && [...svg.querySelectorAll('path.markmap-link')].every((p) => p.getAttribute('d') !== 'M0,0C0,0,0,0,0,0');
+      for (let i = 0; i < 40 && !settled(); i++) {
+        window.d3.timerFlush();
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      const { x1, y1, x2, y2 } = mm.state.rect;
+      const pad = 24, width = Math.ceil(x2 - x1 + pad * 2), height = Math.ceil(y2 - y1 + pad * 2);
+      const vx = Math.floor(x1 - pad), vy = Math.floor(y1 - pad);
+      svg.setAttribute('width', width); svg.setAttribute('height', height);
+      svg.setAttribute('viewBox', `${vx} ${vy} ${width} ${height}`);
+      mm.g.attr('transform', null);
+      const bg = document.createElementNS(NS, 'rect');
+      for (const [k, v] of Object.entries({ x: vx, y: vy, width, height, fill: '#ffffff' })) bg.setAttribute(k, v);
+      svg.insertBefore(bg, svg.firstChild);
+      const out = new XMLSerializer().serializeToString(svg);
+      return { svg: '<?xml version="1.0" encoding="UTF-8"?>\n' + out, width, height };
+    } finally {
+      if (mm) mm.destroy();
+      host.remove();
+    }
+  }
+
+  function svgToPng({ svg, width, height }) {
+    // piksele: 2× dla ostrości, ale z limitem (Android ma ograniczenia wielkości canvasu)
+    const scale = Math.max(0.1, Math.min(2, Math.sqrt(16e6 / (width * height)), 8192 / Math.max(width, height)));
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.round(width * scale); canvas.height = Math.round(height * scale);
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('toBlob'))), 'image/png');
+        } catch (e) { reject(e); }
+      };
+      img.onerror = () => reject(new Error('Nie udało się narysować SVG'));
+      // data: URL (nie blob:), żeby canvas nie został „skażony” przez foreignObject
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    });
+  }
+
+  // Samodzielny plik HTML: interaktywna mapa (zoom, przesuwanie, zwijanie), skrypty wklejone w plik — działa bez internetu.
+  async function buildMapHtml(tree, title) {
+    await loadMarkmap();
+    const [d3src, mmsrc] = await Promise.all(MM_LIBS.map((u) => fetch(u).then((r) => { if (!r.ok) throw new Error(u); return r.text(); })));
+    const safeJs = (s) => s.replace(/<\/script/gi, '<\\/script');
+    const data = JSON.stringify(tree).replace(/</g, '\\u003c');
+    const doc = `<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escHtml(title ? plain(title) : 'MindNotes — mapa myśli')}</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #fff; }
+  .markmap-dark body { background: #14161a; }
+  #mindmap { position: fixed; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<svg id="mindmap"></svg>
+<script>${safeJs(d3src)}</script>
+<script>${safeJs(mmsrc)}</script>
+<script>
+  if (matchMedia('(prefers-color-scheme: dark)').matches) document.documentElement.classList.add('markmap-dark');
+  window.mm = markmap.Markmap.create('#mindmap', {
+    autoFit: true, maxWidth: ${MM_OPTS.maxWidth}, spacingVertical: ${MM_OPTS.spacingVertical},
+    style: function () { return '.markmap{--markmap-font:${MM_FONT.replace(/'/g, "\\'")}}'; }
+  }, ${data});
+</script>
+</body>
+</html>
+`;
+    return new Blob([doc], { type: 'text/html;charset=utf-8' });
+  }
+
+  // format: 'svg' | 'png' | 'html'; nodes = cały notatnik albo jedna notatka / gałąź
+  async function exportMap(format, nodes = state.roots, title = '') {
+    if (!nodes.length) { toast('Nie ma jeszcze czego eksportować.'); return; }
+    toast('Przygotowuję mapę myśli…', { duration: 0 });
+    try {
+      const tree = toMarkmapTree(nodes, title);
+      let blob;
+      if (format === 'html') blob = await buildMapHtml(tree, title);
+      else {
+        const r = await renderMapSvg(tree);
+        blob = format === 'png' ? await svgToPng(r) : new Blob([r.svg], { type: 'image/svg+xml;charset=utf-8' });
+      }
+      downloadBlob(blob, fileName(title, format));
+      toast(`Zapisano mapę myśli (.${format})`);
+    } catch (e) {
+      console.warn('Eksport mapy', e);
+      toast('Nie udało się utworzyć mapy myśli.', { duration: 6000 });
+    }
+  }
+
+  // trzy przyciski formatów (używane w ustawieniach i w oknie notatki)
+  const mapButtons = (run) => h('div', { class: 'three' },
+    ['svg', 'png', 'html'].map((f) =>
+      h('button', { class: 'btn', type: 'button', onclick: () => run(f) }, icon('download'), f.toUpperCase())));
 
   // Udostępnianie: plik .md → sam tekst → schowek → pobranie. Przycisk działa na każdej przeglądarce.
   async function shareMd(nodes = state.roots, title = '') {
@@ -837,6 +1017,11 @@
         h('div', { class: 'two' },
           h('button', { class: 'btn', type: 'button', onclick: () => { setCollapsedAll(state.roots, false); saveNotes(); render(); } }, 'Rozwiń wszystko'),
           h('button', { class: 'btn', type: 'button', onclick: () => { setCollapsedAll(state.roots, true); saveNotes(); render(); } }, 'Zwiń wszystko'))),
+
+      h('div', { class: 'section' },
+        h('h3', {}, 'Mapa myśli'),
+        mapButtons((f) => exportMap(f)),
+        h('p', { class: 'hint' }, 'Eksport całego notatnika jako mapa markmap: SVG (grafika wektorowa), PNG (obraz) albo HTML (interaktywna mapa z przybliżaniem, działa bez internetu). Pojedynczą notatkę lub gałąź wyeksportujesz w jej oknie. Mapa zawiera wszystkie gałęzie, także zwinięte.')),
 
       h('div', { class: 'section' },
         h('h3', {}, 'Kopia zapasowa'),

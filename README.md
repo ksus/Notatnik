@@ -1,7 +1,8 @@
 # Drzewko — notatnik drzewiasty (PWA)
 
-Notatnik w formie drzewa / mapy myśli. Czysty HTML + CSS + JavaScript, bez zależności i bez budowania.
-Działa offline, zapisuje dane lokalnie na urządzeniu, eksportuje i importuje pliki `.md`.
+Notatnik w formie drzewa / mapy myśli. Czysty HTML + CSS + JavaScript, bez budowania (dołączone biblioteki mapy myśli leżą w `lib/`).
+Działa offline, zapisuje dane lokalnie na urządzeniu, eksportuje i importuje pliki `.md`
+oraz eksportuje mapę myśli do SVG, PNG i HTML.
 
 ## Wdrożenie na GitHub Pages
 
@@ -58,6 +59,19 @@ więc mapa ich nie wyświetla:
 - Import rozpoznaje format markmap, zwykłe listy markdown z wcięciami (`-`, `*`, `+`, `1.`) oraz starszy format
   z myślnikami (`-`, `--`, `---`). Brakująca data oznacza „teraz”.
   Przy imporcie możesz dołączyć notatki do istniejących albo je zastąpić.
+
+## Eksport mapy myśli (SVG / PNG / HTML)
+
+Mapa jest rysowana w aplikacji biblioteką [markmap](https://github.com/markmap/markmap) (`lib/markmap-view.js` + `lib/d3.min.js`,
+ładowane dopiero przy pierwszym eksporcie, są w cache service workera, więc działa offline).
+
+- Cały notatnik: Ustawienia → **Mapa myśli** → SVG / PNG / HTML (korzeń mapy: „MindNotes”; gdy jest jedna notatka, ona jest korzeniem).
+- Jedna notatka lub gałąź: dotknij notatki → **Mapa myśli (markmap)**.
+- **SVG** – grafika wektorowa (tekst w `foreignObject`, jak w markmap: otworzy się w przeglądarce; edytory wektorowe mogą go źle wyświetlać).
+- **PNG** – obraz na białym tle, do 2× rozdzielczości (z limitem rozmiaru dla telefonów).
+- **HTML** – jeden samodzielny plik z interaktywną mapą (zoom, przesuwanie, zwijanie), bez internetu.
+- Mapa zawiera wszystkie gałęzie, także zwinięte w aplikacji. Tagi i data nie są rysowane.
+- Aktualizacja bibliotek: `lib/README.txt`.
 
 ## Aktualizacje
 

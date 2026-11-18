@@ -258,6 +258,9 @@ dialog.sheet::backdrop { background: rgba(10, 12, 16, .5); }
 /* dwie kolumny, a przy dużej czcionce przyciski układają się jeden pod drugim */
 .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); gap: .5rem; }
 .btn { text-align: center; line-height: 1.2; padding-top: .45rem; padding-bottom: .45rem; }
+/* trzy równe przyciski (formaty eksportu mapy) */
+.three { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; }
+.three .btn { padding-left: .4rem; padding-right: .4rem; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
