@@ -1,7 +1,7 @@
 /* Service worker — cache-first dla powłoki aplikacji (działa offline).
    WAŻNE: przy każdej zmianie plików aplikacji zwiększ VERSION,
    wtedy użytkownicy dostaną komunikat „Dostępna nowa wersja”. */
-const VERSION = 'v8';
+const VERSION = 'v9';
 const CACHE = `drzewko-${VERSION}`;
 const ASSETS = [
   './',
@@ -19,7 +19,9 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)));
+  // cache: 'reload' — pobieraj świeże pliki z sieci, a nie z cache przeglądarki (GitHub Pages trzyma pliki do 10 min),
+  // inaczej nowa wersja mogłaby zapisać stare pliki
+  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS.map((u) => new Request(u, { cache: 'reload' })))));
 });
 
 self.addEventListener('activate', (event) => {
