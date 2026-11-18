@@ -47,6 +47,7 @@
     settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
     star: '<path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.9l-5.2 2.8 1-5.9-4.3-4.1 5.9-.8z"/>',
     chev: '<path d="m9 6 6 6-6 6"/>',
+    grip: '<g fill="currentColor" stroke="none"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></g>',
     trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
     up: '<path d="M12 19V5M6 11l6-6 6 6"/>',
     down: '<path d="M12 5v14M6 13l6 6 6-6"/>',
@@ -312,7 +313,19 @@
 
   function buildRow(n, depth, ghost, open) {
     const hasKids = n.children.length > 0;
+    const canDrag = depth === 0 && state.roots.length > 1 && !isFiltering(); // przeciąganie tylko notatek głównych, nie podczas filtrowania
     return h('div', { class: 'row' + (depth === 0 ? ' top' : '') + (n.id === state.targetId ? ' target' : '') + (ghost ? ' ghost' : '') },
+      depth === 0
+        ? (canDrag
+            ? h('button', { class: 'grip', type: 'button', title: 'Przeciągnij, aby zmienić kolejność', 'aria-label': 'Zmień kolejność: przeciągnij lub użyj strzałek góra/dół',
+                onpointerdown: (e) => startDrag(e, n.id), oncontextmenu: (e) => e.preventDefault(),
+                onkeydown: (e) => {
+                  if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+                  e.preventDefault(); moveNode(n.id, e.key === 'ArrowUp' ? -1 : 1); saveNotes(); render();
+                  const g = $(`[data-id="${CSS.escape(n.id)}"] .grip`); if (g) g.focus();
+                } }, icon('grip', '1.1em'))
+            : h('span', { class: 'grip-spacer' }))
+        : null,
       hasKids
         ? h('button', { class: 'toggle' + (open ? ' open' : ''), type: 'button', 'aria-label': open ? 'Zwiń' : 'Rozwiń',
             onclick: () => { n.collapsed = !n.collapsed; saveNotes(); render(); } }, icon('chev'))
@@ -335,6 +348,65 @@
         : null,
       h('button', { class: 'add', type: 'button', title: 'Dodaj podwęzeł', 'aria-label': 'Dodaj podwęzeł',
         onclick: () => setTarget(n.id) }, icon('plus')));
+  }
+
+  /* ================= Przeciąganie notatek głównych (zmiana kolejności) ================= */
+  // Pointer Events (palec / mysz / rysik). Podczas przeciągania gałąź jest chowana, żeby dało się ją łatwo przenieść.
+  function startDrag(e, id) {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    const grip = e.currentTarget, li = grip.closest('li.node'), ul = li && li.parentElement;
+    if (!ul || !ul.classList.contains('root')) return;
+    const lis = [...ul.children];
+    if (lis.length !== state.roots.length) return;           // lista niepełna (filtr) — nie zmieniamy kolejności
+    const from = lis.indexOf(li), main = $('#main');
+    e.preventDefault();
+    try { grip.setPointerCapture(e.pointerId); } catch (err) { /* ignoruj */ }
+    ul.classList.add('sorting'); li.classList.add('dragging');
+    try { navigator.vibrate && navigator.vibrate(12); } catch (err) { /* ignoruj */ }
+
+    // pozycje w układzie „treści” (niezależne od przewinięcia), zmierzone po schowaniu dzieci przeciąganej notatki
+    const mainTop = main.getBoundingClientRect().top;
+    const rects = lis.map((x) => x.getBoundingClientRect());
+    const mids = rects.map((r) => r.top - mainTop + main.scrollTop + r.height / 2);
+    const dh = rects[from].height;
+    const startY = e.clientY, startScroll = main.scrollTop;
+    let clientY = startY, to = from, raf = 0;
+
+    const update = () => {
+      const dy = clientY - startY + (main.scrollTop - startScroll);
+      li.style.transform = `translateY(${dy}px)`;
+      const c = mids[from] + dy;
+      to = mids.filter((m, j) => j !== from && m < c).length;  // nowy indeks wśród pozostałych
+      lis.forEach((x, j) => {
+        if (j === from) return;
+        x.style.transform = (from < j && j <= to) ? `translateY(${-dh}px)` : (to <= j && j < from) ? `translateY(${dh}px)` : '';
+      });
+    };
+    const tick = () => {            // automatyczne przewijanie przy krawędzi listy
+      raf = 0;
+      const r = main.getBoundingClientRect(), zone = 56;
+      let v = 0;
+      if (clientY < r.top + zone) v = -Math.min(18, Math.ceil((r.top + zone - clientY) / 5));
+      else if (clientY > r.bottom - zone) v = Math.min(18, Math.ceil((clientY - (r.bottom - zone)) / 5));
+      if (v) { main.scrollTop += v; update(); raf = requestAnimationFrame(tick); }
+    };
+    const onMove = (ev) => { clientY = ev.clientY; update(); if (!raf) raf = requestAnimationFrame(tick); };
+    const finish = (commit) => {
+      grip.removeEventListener('pointermove', onMove);
+      grip.removeEventListener('pointerup', onUp);
+      grip.removeEventListener('pointercancel', onCancel);
+      if (raf) cancelAnimationFrame(raf);
+      if (commit && to !== from) {
+        const [moved] = state.roots.splice(from, 1);
+        state.roots.splice(to, 0, moved);
+        saveNotes(); render(); flash(id);
+      } else render();               // odtwarza widok (czyści transformacje)
+    };
+    const onUp = () => finish(true), onCancel = () => finish(false);
+    grip.addEventListener('pointermove', onMove);
+    grip.addEventListener('pointerup', onUp);
+    grip.addEventListener('pointercancel', onCancel);
+    update();
   }
 
   function renderFilterBar() {
