@@ -1,7 +1,7 @@
 /* Service worker — cache-first dla powłoki aplikacji (działa offline).
    WAŻNE: przy każdej zmianie plików aplikacji zwiększ VERSION,
    wtedy użytkownicy dostaną komunikat „Dostępna nowa wersja”. */
-const VERSION = 'v5';
+const VERSION = 'v6';
 const CACHE = `drzewko-${VERSION}`;
 const ASSETS = [
   './',
