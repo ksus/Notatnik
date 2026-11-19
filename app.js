@@ -89,8 +89,12 @@
     return { text, tags: uniq(tags) };
   }
 
-  /* ----- formatowanie (etykiety markmap): **pogrubienie**, *kursywa*, ~~przekreślenie~~ (także --przekreślenie--) ----- */
-  const INLINE_SRC = '(\\*\\*\\*|\\*\\*|~~|--|\\*)(\\S(?:.*?\\S)?)\\1';
+  /* ----- formatowanie (etykiety markmap): **pogrubienie**, *kursywa*, ~~przekreślenie~~ (także --przekreślenie--), ==zakreślenie== ----- */
+  const INLINE_SRC = '(\\*\\*\\*|\\*\\*|~~|==|--|\\*)(\\S(?:.*?\\S)?)\\1';
+
+  // zadanie (lista zadań markmap): „[ ] treść” / „[x] treść” na początku tekstu węzła
+  const TASK_RE = /^\[([ xX])\]\s+(\S.*)$/;
+  const taskOf = (text) => { const m = TASK_RE.exec(text); return m ? { done: m[1] !== ' ', rest: m[2] } : null; };
 
   function renderInline(text, level = 0) {
     const frag = document.createDocumentFragment();
@@ -104,6 +108,7 @@
       if (mark === '***') el = h('strong', {}, h('em', {}, content));
       else if (mark === '**') el = h('strong', {}, content);
       else if (mark === '*') el = h('em', {}, content);
+      else if (mark === '==') el = h('mark', {}, content);
       else el = h('del', {}, content);
       frag.append(el);
       last = m.index + m[0].length;
@@ -112,10 +117,17 @@
     return frag;
   }
   // tekst bez znaczników (do wyszukiwania i podpisów)
-  const plain = (text) => String(text).replace(new RegExp(INLINE_SRC, 'g'), (m, mk, inner) => plain(inner));
+  const plain = (text) => String(text).replace(TASK_RE, '$2').replace(new RegExp(INLINE_SRC, 'g'), (m, mk, inner) => plain(inner));
   // do eksportu: --x-- zamieniamy na standardowe ~~x~~
   const toMarkmapInline = (text) => String(text).replace(new RegExp(INLINE_SRC, 'g'),
     (m, mk, inner) => { const k = mk === '--' ? '~~' : mk; return k + toMarkmapInline(inner) + k; });
+
+  // [ ] → [x] → [ ] (w treści węzła)
+  function toggleTask(id) {
+    const l = locate(id); if (!l) return;
+    l.node.text = l.node.text.replace(/^\[([ xX])\]/, (m, c) => (c === ' ' ? '[x]' : '[ ]'));
+    saveNotes(); render();
+  }
 
   /* ================= Zapis / odczyt ================= */
   function sanitizeNodes(list, depth = 0) {
@@ -301,7 +313,8 @@
       tree.replaceChildren(h('div', { class: 'empty' },
         h('h2', {}, 'Tu będzie Twoje drzewo myśli'),
         h('p', {}, 'Wpisz pierwszą notatkę na dole. Dodaj ', h('code', {}, '#tag'), ', aby ją otagować.'),
-        h('p', {}, 'Formatuj: ', h('code', {}, '**pogrubienie**'), ' ', h('code', {}, '*kursywa*'), ' ', h('code', {}, '~~przekreślenie~~')),
+        h('p', {}, 'Formatuj: ', h('code', {}, '**pogrubienie**'), ' ', h('code', {}, '*kursywa*'), ' ', h('code', {}, '~~przekreślenie~~'), ' ', h('code', {}, '==zakreślenie==')),
+        h('p', {}, 'Zadania: ', h('code', {}, '[ ] do zrobienia'), ' ', h('code', {}, '[x] zrobione')),
         h('p', {}, 'Przycisk ＋ przy notatce dodaje podwęzeł, ★ oznacza ulubione.')));
     } else if (filtering && !list.children.length) {
       tree.replaceChildren(h('div', { class: 'empty' }, h('p', {}, 'Brak pasujących notatek.')));
@@ -331,7 +344,18 @@
           } else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openNodeSheet(n.id); }
         },
       },
-        h('span', { class: 'text' }, renderInline(n.text)),
+        (() => {
+          const task = taskOf(n.text);
+          return h('span', { class: 'text' + (task && task.done ? ' done' : '') },
+            task ? h('button', {
+              class: 'cb' + (task.done ? ' on' : ''), type: 'button', role: 'checkbox', 'aria-checked': String(task.done),
+              'aria-label': task.done ? 'Zadanie wykonane — odznacz' : 'Zadanie do zrobienia — zaznacz',
+              onpointerdown: (e) => e.stopPropagation(),            // nie uruchamiaj przeciągania
+              onkeydown: (e) => e.stopPropagation(),
+              onclick: (e) => { e.stopPropagation(); toggleTask(n.id); },
+            }) : null,
+            renderInline(task ? task.rest : n.text));
+        })(),
         h('span', { class: 'meta' },
           depth === 0 ? n.tags.map((t) => h('span', { class: 'chip' }, '#' + t)) : null,
           !open && hasKids ? h('span', { class: 'count', title: 'Ukryte podwęzły' }, '+' + countNodes(n.children)) : null,
@@ -607,7 +631,16 @@
           fmtBtn('B', 'Pogrubienie **tekst**', '**', 'fmt-b'),
           fmtBtn('I', 'Kursywa *tekst*', '*', 'fmt-i'),
           fmtBtn('S', 'Przekreślenie ~~tekst~~', '~~', 'fmt-s'),
-          h('span', { class: 'hint' }, '**pogrubienie**  *kursywa*  ~~przekreślenie~~'))),
+          fmtBtn('H', 'Zakreślenie ==tekst==', '==', 'fmt-h'),
+          h('button', { class: 'fmt fmt-t', type: 'button', title: 'Zadanie: brak → [ ] → [x] → brak', 'aria-label': 'Zadanie (pole wyboru)',
+            onmousedown: (e) => e.preventDefault(),
+            onclick: () => {
+              const el = $('#sText'); if (!el) return;
+              const v = el.value, m = /^\[([ xX])\]\s*/.exec(v);
+              const next = !m ? '[ ] ' + v : m[1] === ' ' ? '[x] ' + v.slice(m[0].length) : v.slice(m[0].length);
+              el.value = next; el.focus(); el.setSelectionRange(next.length, next.length);
+            } }, '☑'),
+          h('span', { class: 'hint' }, '**b**  *i*  ~~s~~  ==zakreślenie==  [ ] / [x] zadanie'))),
 
       isRoot ? h('button', { class: 'btn fav-toggle' + (node.fav ? ' on' : ''), type: 'button', 'aria-pressed': String(!!node.fav),
         onclick: act((id) => { const l = locate(id); if (l) l.node.fav = !l.node.fav; }) },
@@ -838,6 +871,12 @@
   const MM_LIBS = ['lib/d3.min.js', 'lib/markmap-view.js'];
   const MM_FONT = '400 16px/20px system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
   const MM_OPTS = { maxWidth: 360, spacingVertical: 6 };
+  // style dla zadań i zakreśleń w mapie (checkbox rysowany CSS-em, żeby wyglądał tak samo w SVG, PNG i HTML)
+  const mmCss = () => `.markmap{--markmap-font:${MM_FONT}}`
+    + '.markmap mark{background:#fff0a0;color:#1f2430;padding:0 .15em;border-radius:3px}'
+    + '.markmap .mm-cb{display:inline-block;position:relative;box-sizing:border-box;width:.95em;height:.95em;margin-right:.4em;vertical-align:-.12em;border:1.6px solid currentColor;border-radius:.2em;opacity:.8}'
+    + '.markmap .mm-cb-on{background:#2c6b5a;border-color:#2c6b5a;opacity:1}'
+    + '.markmap .mm-cb-on::after{content:"";position:absolute;left:.27em;top:.03em;width:.26em;height:.52em;border:solid #fff;border-width:0 .15em .15em 0;transform:rotate(45deg)}';
   let mmLoading = null;
 
   function loadScript(src) {
@@ -868,6 +907,7 @@
       out += mark === '***' ? `<strong><em>${c}</em></strong>`
         : mark === '**' ? `<strong>${c}</strong>`
         : mark === '*' ? `<em>${c}</em>`
+        : mark === '==' ? `<mark>${c}</mark>`
         : `<del>${c}</del>`;
       last = m.index + m[0].length;
     }
@@ -875,7 +915,11 @@
   }
   // jeden korzeń mapy: pojedyncza notatka / gałąź albo „MindNotes” z notatkami jako gałęziami
   function toMarkmapTree(nodes, title) {
-    const conv = (n) => ({ content: inlineHtml(n.text), children: n.children.map(conv) });
+    const label = (text) => {
+      const t = taskOf(text);
+      return t ? `<span class="mm-cb${t.done ? ' mm-cb-on' : ''}"></span>${inlineHtml(t.rest)}` : inlineHtml(text);
+    };
+    const conv = (n) => ({ content: label(n.text), children: n.children.map(conv) });
     return nodes.length === 1 ? conv(nodes[0]) : { content: escHtml(title || 'MindNotes'), children: nodes.map(conv) };
   }
 
@@ -891,7 +935,7 @@
     try {
       mm = new window.markmap.Markmap(svg, {
         ...MM_OPTS, duration: 0, zoom: false, pan: false, autoFit: false,
-        style: () => `.markmap{--markmap-font:${MM_FONT}}`,
+        style: mmCss,
       });
       await mm.setData(JSON.parse(JSON.stringify(tree)));
       // setData wraca przed końcem przejścia d3 (węzły mają jeszcze opacity 0, linie szerokość 0) —
@@ -966,7 +1010,7 @@
   if (matchMedia('(prefers-color-scheme: dark)').matches) document.documentElement.classList.add('markmap-dark');
   window.mm = markmap.Markmap.create('#mindmap', {
     autoFit: true, maxWidth: ${MM_OPTS.maxWidth}, spacingVertical: ${MM_OPTS.spacingVertical},
-    style: function () { return '.markmap{--markmap-font:${MM_FONT.replace(/'/g, "\\'")}}'; }
+    style: function () { return ${JSON.stringify(mmCss()).replace(/</g, '\\u003c')}; }
   }, ${data});
 </script>
 </body>
@@ -1104,7 +1148,7 @@
           h('button', { class: 'btn small', type: 'button', 'aria-label': 'Mniejsza czcionka', onclick: () => setFs(s.fontSize - 1) }, 'A−'),
           range,
           h('button', { class: 'btn small', type: 'button', 'aria-label': 'Większa czcionka', onclick: () => setFs(s.fontSize + 1) }, 'A+')),
-        h('div', { class: 'preview' }, renderInline('Przykład: **pogrubienie**, *kursywa*, ~~przekreślenie~~'))),
+        h('div', { class: 'preview' }, renderInline('Przykład: **pogrubienie**, *kursywa*, ~~przekreślenie~~, ==zakreślenie=='))),
 
       h('div', { class: 'section' },
         h('h3', {}, 'Drzewo'),

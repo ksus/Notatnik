@@ -29,6 +29,7 @@ Wszystkie ścieżki w aplikacji są względne, więc działa zarówno pod `użyt
 - Dotknięcie notatki otwiera jej okno: edycja treści i tagów, data utworzenia, przesuwanie w górę/w dół,
   wcięcie/wysunięcie, usuwanie.
 - Kolejność notatek głównych: przytrzymaj palec na tytule notatki (ok. 0,4 s, telefon krótko zawibruje) i przeciągnij; przy krawędzi ekranu lista sama się przewija. Na komputerze wystarczy złapać tytuł myszą. Z klawiatury: Alt + ↑ / ↓ na wybranej notatce. Przeciąganie jest wyłączone podczas wyszukiwania i filtrowania.
+- Formatowanie: `**pogrubienie**`, `*kursywa*`, `~~przekreślenie~~`, `==zakreślenie==`. Zadania: `[ ] do zrobienia` i `[x] zrobione` na początku tekstu — przy notatce pojawia się pole wyboru, które zaznaczasz dotknięciem. W oknie notatki są przyciski B / I / S / H oraz ☑ (przełącza: brak → `[ ]` → `[x]` → brak).
 - Lupa: wyszukiwanie i filtrowanie po tagach.
 - Ustawienia: motyw (jasny / ciemny / systemowy), rozmiar czcionki, format eksportu, eksport i import.
 
@@ -71,6 +72,7 @@ Mapa jest rysowana w aplikacji biblioteką [markmap](https://github.com/markmap/
 - **SVG** – grafika wektorowa (tekst w `foreignObject`, jak w markmap: otworzy się w przeglądarce; edytory wektorowe mogą go źle wyświetlać).
 - **PNG** – obraz na białym tle, do 2× rozdzielczości (z limitem rozmiaru dla telefonów).
 - **HTML** – jeden samodzielny plik z interaktywną mapą (zoom, przesuwanie, zwijanie), bez internetu.
+- Zadania `[ ]` / `[x]` i `==zakreślenie==` są rysowane na mapie (pole wyboru i żółte tło). W pliku `.md` pola wyboru działają w markmap.js.org na liście (poziom 3 i głębiej); w nagłówkach (`#`, `##`) markmap pokaże `[x]` jako zwykły tekst.
 - Mapa zawiera wszystkie gałęzie, także zwinięte w aplikacji. Tagi i data nie są rysowane.
 - Aktualizacja bibliotek: `lib/README.txt`.
 
