@@ -370,7 +370,9 @@
     b.setAttribute('aria-pressed', String(arch));
     const label = arch ? 'Wróć do notatek' : 'Archiwum' + (count ? ` (${count})` : '');
     b.setAttribute('aria-label', label); b.title = label;
-    badge.textContent = String(count); badge.hidden = arch || !count;
+    badge.textContent = String(count); 
+    // badge.hidden = arch || !count;
+    badge.hidden = true; // <-- zawsze ukryte (pokazywanie ilości notatek w archiwum)
     const bar = $('#archbar');
     bar.hidden = !arch;
     if (arch) bar.replaceChildren(
