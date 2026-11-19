@@ -4,16 +4,6 @@ Notatnik w formie drzewa / mapy myśli. Czysty HTML + CSS + JavaScript, bez budo
 Działa offline, zapisuje dane lokalnie na urządzeniu, eksportuje i importuje pliki `.md`
 oraz eksportuje mapę myśli do SVG, PNG i HTML.
 
-## Wdrożenie na GitHub Pages
-
-1. Utwórz repozytorium na GitHubie (np. `drzewko`).
-2. Wgraj **zawartość tego folderu** do głównego katalogu repozytorium (`index.html` musi być w korzeniu).
-3. W repozytorium: **Settings → Pages → Build and deployment → Source: Deploy from a branch**,
-   wybierz gałąź `main` i folder `/ (root)`, zapisz.
-4. Po minucie aplikacja jest pod adresem `https://TWOJA-NAZWA.github.io/drzewko/`.
-
-Wszystkie ścieżki w aplikacji są względne, więc działa zarówno pod `użytkownik.github.io/repo/`, jak i pod własną domeną.
-
 ## Instalacja na telefonie
 
 - **Android (Chrome):** menu ⋮ → *Zainstaluj aplikację* (lub przycisk w Ustawieniach aplikacji).
