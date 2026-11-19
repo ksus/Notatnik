@@ -428,9 +428,10 @@
   /* ================= Przeciąganie notatek głównych (zmiana kolejności) ================= */
   // Zmiana kolejności — dotyk / rysik: przytrzymaj tytuł notatki ~0,4 s bez ruchu, potem przeciągnij.
   // Mysz (komputer): złap tytuł i przesuń o kilka pikseli. Krótkie dotknięcie nadal otwiera okno notatki.
-  const HOLD_MS = 380, MOVE_SLOP = 8;
+  const HOLD_MS = 380, MOVE_SLOP = 8, SWIPE_SWITCH = 24;   // SWIPE_SWITCH: ruch w bok po przytrzymaniu zamienia „podniesienie” w przesunięcie
   let dragging = false;     // trwa przeciąganie lub przesuwanie w bok — blokuje przewijanie listy palcem
   let noClickUntil = 0;     // po przeciągnięciu ignorujemy „kliknięcie” dosyłane po puszczeniu
+  let gestureEnd = null;    // zakończenie trwającego gestu (zabezpieczenie, gdyby zdarzenie puszczenia nie dotarło do notatki)
 
   // Jeden punkt wejścia dla gestów na tytule notatki głównej:
   //  • przesunięcie poziome: w prawo = archiwizuj (w archiwum: przywróć), w lewo = usuń (z opcją „Cofnij”),
@@ -442,18 +443,18 @@
     if (!ul || !ul.classList.contains('root')) return;
     const reorder = allowReorder && ul.children.length === viewRoots().length;   // lista pełna (bez filtra)
     const pid = e.pointerId, x0 = e.clientX, y0 = e.clientY, mouse = e.pointerType === 'mouse';
-    let y = y0, timer = 0;
+    let x = x0, y = y0, timer = 0;
     const disarm = () => {
       clearTimeout(timer);
       el.removeEventListener('pointermove', onMove);
       el.removeEventListener('pointerup', disarm);
       el.removeEventListener('pointercancel', disarm);
     };
-    const go = () => { disarm(); beginDrag(el, li, ul, pid, y, id); };
+    const go = () => { disarm(); beginDrag(el, li, ul, pid, x, y, id); };
     const onMove = (ev) => {
       if (ev.pointerId !== pid) return;
-      y = ev.clientY;
-      const dx = ev.clientX - x0, dy = ev.clientY - y0;
+      x = ev.clientX; y = ev.clientY;
+      const dx = x - x0, dy = y - y0;
       if (Math.hypot(dx, dy) <= MOVE_SLOP) return;
       if (Math.abs(dx) > Math.abs(dy)) { disarm(); beginSwipe(el, li, pid, x0, id); }
       else if (mouse && reorder) go();
@@ -495,7 +496,9 @@
       }
     };
     const onMove = (ev) => { if (ev.pointerId !== pid) return; dx = ev.clientX - x0; update(); };
+    let done = false;
     const finish = (commit) => {
+      if (done) return; done = true; gestureEnd = null;
       el.removeEventListener('pointermove', onMove);
       el.removeEventListener('pointerup', onUp);
       el.removeEventListener('pointercancel', onCancel);
@@ -514,6 +517,7 @@
       }
     };
     const onUp = () => finish(true), onCancel = () => finish(false);
+    gestureEnd = finish;
     el.addEventListener('pointermove', onMove);
     el.addEventListener('pointerup', onUp);
     el.addEventListener('pointercancel', onCancel);
@@ -521,7 +525,7 @@
   }
 
   // Podczas przeciągania gałąź jest chowana, żeby dało się ją łatwo przenieść.
-  function beginDrag(el, li, ul, pid, startY, id) {
+  function beginDrag(el, li, ul, pid, startX, startY, id) {
     const lis = [...ul.children], from = lis.indexOf(li), main = $('#main');
     if (from < 0) return;
     dragging = true;
@@ -554,8 +558,26 @@
       else if (clientY > r.bottom - zone) v = Math.min(18, Math.ceil((clientY - (r.bottom - zone)) / 5));
       if (v) { main.scrollTop += v; update(); raf = requestAnimationFrame(tick); }
     };
-    const onMove = (ev) => { if (ev.pointerId !== pid) return; clientY = ev.clientY; update(); if (!raf) raf = requestAnimationFrame(tick); };
+    // przytrzymanie, a potem ruch w bok = jednak przesunięcie (archiwizuj / usuń), a nie zmiana kolejności
+    const switchToSwipe = () => {
+      el.removeEventListener('pointermove', onMove);
+      el.removeEventListener('pointerup', onUp);
+      el.removeEventListener('pointercancel', onCancel);
+      if (raf) cancelAnimationFrame(raf);
+      done = true; gestureEnd = null; dragging = false;
+      ul.classList.remove('sorting'); li.classList.remove('dragging');
+      li.style.transform = ''; lis.forEach((x) => { x.style.transform = ''; });
+      beginSwipe(el, li, pid, startX, id);
+    };
+    const onMove = (ev) => {
+      if (ev.pointerId !== pid) return;
+      const dx = ev.clientX - startX, dy = ev.clientY - startY;
+      if (Math.abs(dx) > SWIPE_SWITCH && Math.abs(dx) > 1.5 * Math.abs(dy)) { switchToSwipe(); return; }
+      clientY = ev.clientY; update(); if (!raf) raf = requestAnimationFrame(tick);
+    };
+    let done = false;
     const finish = (commit) => {
+      if (done) return; done = true; gestureEnd = null;
       el.removeEventListener('pointermove', onMove);
       el.removeEventListener('pointerup', onUp);
       el.removeEventListener('pointercancel', onCancel);
@@ -570,6 +592,7 @@
       } else render();               // odtwarza widok (czyści transformacje)
     };
     const onUp = () => finish(true), onCancel = () => finish(false);
+    gestureEnd = finish;
     el.addEventListener('pointermove', onMove);
     el.addEventListener('pointerup', onUp);
     el.addEventListener('pointercancel', onCancel);
@@ -1351,6 +1374,11 @@
     $('#fInput').addEventListener('input', (e) => { state.filter.q = e.target.value; render(); });
 
     initComposer();
+    // zabezpieczenie: gdyby puszczenie palca nie dotarło do notatki (np. przejęcie gestu przez system), kończymy gest tutaj
+    window.addEventListener('pointerup', () => { if (dragging && gestureEnd) gestureEnd(true); });
+    window.addEventListener('pointercancel', () => { if (dragging && gestureEnd) gestureEnd(false); });
+    window.addEventListener('blur', () => { if (dragging && gestureEnd) gestureEnd(false); });
+    document.addEventListener('visibilitychange', () => { if (document.hidden && dragging && gestureEnd) gestureEnd(false); });
     // w trakcie przeciągania notatki palec nie może przewijać listy (listener nie-pasywny)
     $('#main').addEventListener('touchmove', (e) => { if (dragging && e.cancelable) e.preventDefault(); }, { passive: false });
 
