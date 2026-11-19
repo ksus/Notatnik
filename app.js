@@ -1,5 +1,5 @@
 'use strict';
-/* Drzewko — notatnik drzewiasty (PWA). Bez builda. Biblioteki mapy myśli (lib/) ładowane są leniwie, tylko przy eksporcie mapy. */
+/* Drzewko — notatnik drzewiasty (PWA). Bez builda. Biblioteki mapy myśli (lib/) ładowane są leniwie, tylko przy eksporcie mapy. (...)*/
 (() => {
   /* ================= Stałe i stan ================= */
   const KEY_NOTES = 'drzewko.notes.v1';
