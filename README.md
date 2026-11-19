@@ -30,6 +30,8 @@ Wszystkie ścieżki w aplikacji są względne, więc działa zarówno pod `użyt
   wcięcie/wysunięcie, usuwanie.
 - Kolejność notatek głównych: przytrzymaj palec na tytule notatki (ok. 0,4 s, telefon krótko zawibruje) i przeciągnij; przy krawędzi ekranu lista sama się przewija. Na komputerze wystarczy złapać tytuł myszą. Z klawiatury: Alt + ↑ / ↓ na wybranej notatce. Przeciąganie jest wyłączone podczas wyszukiwania i filtrowania.
 - Formatowanie: `**pogrubienie**`, `*kursywa*`, `~~przekreślenie~~`, `==zakreślenie==`. Zadania: `[ ] do zrobienia` i `[x] zrobione` na początku tekstu — przy notatce pojawia się pole wyboru, które zaznaczasz dotknięciem. W oknie notatki są przyciski B / I / S / H oraz ☑ (przełącza: brak → `[ ]` → `[x]` → brak).
+- Archiwum notatek głównych: przesuń notatkę palcem **w prawo**, aby przenieść ją do archiwum, albo **w lewo**, aby ją usunąć (oba ruchy można cofnąć przyciskiem „Cofnij”). Za krótkie przesunięcie wraca na miejsce. To samo jest w oknie notatki: „Przenieś do archiwum”.
+- Przycisk archiwum (pudełko, z licznikiem) u góry otwiera listę zarchiwizowanych tematów. W archiwum przesunięcie w prawo **przywraca** notatkę, w lewo usuwa ją na stałe (też z „Cofnij”). Archiwum ma własne wyszukiwanie i tagi.
 - Lupa: wyszukiwanie i filtrowanie po tagach.
 - Ustawienia: motyw (jasny / ciemny / systemowy), rozmiar czcionki, format eksportu, eksport i import.
 
@@ -59,7 +61,7 @@ więc mapa ich nie wyświetla:
 - Całość: Ustawienia → **Eksport .md**. Jedna notatka z gałęziami: dotknij notatki → **Eksport notatki / gałęzi .md**
   (można też wyeksportować dowolne podwęzeł jako osobną mapę).
 - Import rozpoznaje format markmap, zwykłe listy markdown z wcięciami (`-`, `*`, `+`, `1.`) oraz starszy format
-  z myślnikami (`-`, `--`, `---`). Brakująca data oznacza „teraz”.
+  z myślnikami (`-`, `--`, `---`). Brakująca data oznacza „teraz”. Eksport `.md` zawiera także archiwum: notatka zarchiwizowana ma w komentarzu pod nagłówkiem znacznik 📦, więc import ją odtwarza.
   Przy imporcie możesz dołączyć notatki do istniejących albo je zastąpić.
 
 ## Eksport mapy myśli (SVG / PNG / HTML)
@@ -73,6 +75,7 @@ Mapa jest rysowana w aplikacji biblioteką [markmap](https://github.com/markmap/
 - **PNG** – obraz na białym tle, do 2× rozdzielczości (z limitem rozmiaru dla telefonów).
 - **HTML** – jeden samodzielny plik z interaktywną mapą (zoom, przesuwanie, zwijanie), bez internetu.
 - Zadania `[ ]` / `[x]` i `==zakreślenie==` są rysowane na mapie (pole wyboru i żółte tło). W pliku `.md` pola wyboru działają w markmap.js.org na liście (poziom 3 i głębiej); w nagłówkach (`#`, `##`) markmap pokaże `[x]` jako zwykły tekst.
+- Mapa z Ustawień nie zawiera notatek z archiwum (pojedynczą zarchiwizowaną notatkę wyeksportujesz w jej oknie).
 - Mapa zawiera wszystkie gałęzie, także zwinięte w aplikacji. Tagi i data nie są rysowane.
 - Aktualizacja bibliotek: `lib/README.txt`.
 

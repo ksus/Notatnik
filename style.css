@@ -279,13 +279,34 @@ dialog.sheet::backdrop { background: rgba(10, 12, 16, .5); }
 .fmt-h { background: #fff0a0; color: #1f2430; }
 :root[data-theme="dark"] .fmt-h { background: #6b5a14; color: #fff3c4; }
 /* przeciąganie notatek głównych (przytrzymanie tytułu) */
-.body.sortable { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.body.sortable { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: pan-y; }
+/* przesunięcie w bok: w prawo = archiwizuj / przywróć, w lewo = usuń */
+#tree .node.swiping { position: relative; overflow: hidden; border-radius: .6rem; }
+#tree .node.swiping > .children { display: none; }
+#tree .node.swiping > .row { position: relative; z-index: 1; background: var(--bg); }
+.swipe-bg {
+  position: absolute; inset: 0; display: flex; align-items: center; gap: .5rem; padding: 0 1rem;
+  font-weight: 700; font-size: .9rem; opacity: .75;
+}
+.swipe-bg.right { background: var(--accent); color: var(--accent-ink); justify-content: flex-start; }
+.swipe-bg.left { background: var(--danger); color: var(--danger-soft); justify-content: flex-end; }
+.swipe-bg.armed { opacity: 1; }
 #tree ul.sorting > .node:not(.dragging) { transition: transform .16s ease; }
 #tree ul.sorting > .node.dragging {
   position: relative; z-index: 4; background: var(--surface); border-radius: .7rem;
   box-shadow: 0 8px 24px rgba(0, 0, 0, .28); transition: none;
 }
 #tree ul.sorting > .node.dragging > .children { display: none; }
+/* przycisk archiwum, licznik i pasek archiwum */
+.icon-btn { position: relative; }
+.badge {
+  position: absolute; top: .3rem; right: .15rem; min-width: 1.05rem; height: 1.05rem; padding: 0 .25rem;
+  border-radius: 999px; background: var(--accent); color: var(--accent-ink);
+  font-size: .62rem; font-weight: 700; line-height: 1; display: flex; align-items: center; justify-content: center;
+}
+#archbar { flex: none; padding: .1rem .9rem .55rem; border-bottom: 1px solid var(--line); }
+#archbar b { color: var(--accent); }
+#archbar p { margin: .15rem 0 0; font-size: .8rem; color: var(--muted); }
 /* trzy równe przyciski (formaty eksportu mapy) */
 .three { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; }
 .three .btn { padding-left: .4rem; padding-right: .4rem; }

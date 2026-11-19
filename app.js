@@ -13,6 +13,7 @@
     settings: { ...DEFAULT_SETTINGS },
     targetId: null,            // pod którym węzłem dodajemy (null = najwyższy poziom)
     filter: { open: false, q: '', tag: null, fav: false },
+    view: 'main',              // 'main' = aktywne notatki, 'archive' = archiwum
   };
   const toastEl = document.getElementById('toast');
 
@@ -47,6 +48,8 @@
     settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
     star: '<path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.9l-5.2 2.8 1-5.9-4.3-4.1 5.9-.8z"/>',
     chev: '<path d="m9 6 6 6-6 6"/>',
+    archive: '<rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/>',
+    unarchive: '<rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h2"/><path d="M20 8v11a2 2 0 0 1-2 2h-2"/><path d="m9 15 3-3 3 3"/><path d="M12 12v9"/>',
     trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
     up: '<path d="M12 19V5M6 11l6-6 6 6"/>',
     down: '<path d="M12 5v14M6 13l6 6 6-6"/>',
@@ -144,6 +147,7 @@
         tags: Array.isArray(n.tags) ? uniq(n.tags.map(cleanTag).filter(Boolean)) : [],
         collapsed: !!n.collapsed,
         fav: !!n.fav,
+        archived: depth === 0 && !!n.archived,   // archiwum dotyczy tylko notatek głównych
         children: sanitizeNodes(n.children, depth + 1),
       });
     }
@@ -185,7 +189,11 @@
   }
   const countNodes = (list) => list.reduce((s, n) => s + 1 + countNodes(n.children), 0);
   const makeNode = (text, tags = [], created = new Date().toISOString()) =>
-    ({ id: uid(), text, created, tags, collapsed: false, fav: false, children: [] });
+    ({ id: uid(), text, created, tags, collapsed: false, fav: false, archived: false, children: [] });
+
+  const isArch = () => state.view === 'archive';
+  const activeRoots = () => state.roots.filter((n) => !n.archived);
+  const viewRoots = () => state.roots.filter((n) => !!n.archived === isArch());
 
   function addNode(parentId, raw) {
     const p = parseEntry(raw, !parentId); // tagi tylko w węzłach głównych
@@ -201,15 +209,22 @@
     list.push(node);
     return node;
   }
+  // indeks sąsiada w danym kierunku (notatki główne: pomijamy te z drugiego widoku — archiwum / aktywne); -1 gdy brak
+  function siblingIndex(l, dir) {
+    let j = l.index + dir;
+    if (!l.parent) while (j >= 0 && j < l.list.length && !!l.list[j].archived !== !!l.node.archived) j += dir;
+    return j < 0 || j >= l.list.length ? -1 : j;
+  }
   function moveNode(id, dir) {
     const l = locate(id); if (!l) return;
-    const j = l.index + dir;
-    if (j < 0 || j >= l.list.length) return;
+    const j = siblingIndex(l, dir);
+    if (j < 0) return;
     [l.list[l.index], l.list[j]] = [l.list[j], l.list[l.index]];
   }
   function indentNode(id) {            // staje się podwęzłem poprzedniego rodzeństwa
-    const l = locate(id); if (!l || l.index === 0) return;
-    const prev = l.list[l.index - 1];
+    const l = locate(id); if (!l) return;
+    const pj = siblingIndex(l, -1); if (pj < 0) return;
+    const prev = l.list[pj];
     l.list.splice(l.index, 1);
     prev.children.push(l.node);
     prev.collapsed = false;
@@ -218,6 +233,7 @@
     const l = locate(id); if (!l || !l.parent) return;
     const pl = locate(l.parent.id);
     l.list.splice(l.index, 1);
+    if (!pl.parent) l.node.archived = !!pl.node.archived;   // nowa notatka główna zostaje tam, gdzie był jej rodzic
     pl.list.splice(pl.index + 1, 0, l.node);
   }
   function removeNode(id) {
@@ -227,11 +243,25 @@
   function setCollapsedAll(list, value) {
     for (const n of list) { if (n.children.length) n.collapsed = value; setCollapsedAll(n.children, value); }
   }
-  function allTags() {
+  function allTags(roots = viewRoots()) {
     const m = new Map();
-    (function walk(list) { for (const n of list) { for (const t of n.tags) m.set(t, (m.get(t) || 0) + 1); walk(n.children); } })(state.roots);
+    (function walk(list) { for (const n of list) { for (const t of n.tags) m.set(t, (m.get(t) || 0) + 1); walk(n.children); } })(roots);
     return [...m].map(([tag, count]) => ({ tag, count }))
       .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag, 'pl'));
+  }
+
+  // Przenosi notatkę główną do archiwum (value = true) albo z powrotem (false) — z możliwością cofnięcia
+  function archiveNode(id, value) {
+    destructive(value ? 'Przeniesiono do archiwum' : 'Przywrócono z archiwum', () => {
+      const l = locate(id); if (l && !l.parent) l.node.archived = value;
+      state.targetId = null;
+    });
+  }
+  function setView(v) {
+    state.view = v; state.targetId = null;
+    state.filter.tag = null; state.filter.fav = false;   // tagi dotyczą tylko bieżącego widoku
+    $('#main').scrollTop = 0;
+    render();
   }
 
   // Operacja z możliwością cofnięcia (toast „Cofnij”)
@@ -307,8 +337,18 @@
       return ul;
     };
 
-    const list = build(state.roots, 0, false);
+    const list = build(viewRoots(), 0, false);
     tree.replaceChildren(list);
+    if (!list.children.length) {
+      const archived = state.roots.length - activeRoots().length;
+      if (filtering) tree.replaceChildren(h('div', { class: 'empty' }, h('p', {}, 'Brak pasujących notatek.')));
+      else if (isArch()) tree.replaceChildren(h('div', { class: 'empty' },
+        h('h2', {}, 'Archiwum jest puste'),
+        h('p', {}, 'Przeciągnij notatkę w prawo, aby ją tu przenieść.')));
+      else if (state.roots.length) tree.replaceChildren(h('div', { class: 'empty' },
+        h('h2', {}, 'Wszystko w archiwum'),
+        h('p', {}, `Aktywnych notatek: 0. W archiwum: ${archived}.`)));
+    }
     if (!state.roots.length) {
       tree.replaceChildren(h('div', { class: 'empty' },
         h('h2', {}, 'Tu będzie Twoje drzewo myśli'),
@@ -316,16 +356,32 @@
         h('p', {}, 'Formatuj: ', h('code', {}, '**pogrubienie**'), ' ', h('code', {}, '*kursywa*'), ' ', h('code', {}, '~~przekreślenie~~'), ' ', h('code', {}, '==zakreślenie==')),
         h('p', {}, 'Zadania: ', h('code', {}, '[ ] do zrobienia'), ' ', h('code', {}, '[x] zrobione')),
         h('p', {}, 'Przycisk ＋ przy notatce dodaje podwęzeł, ★ oznacza ulubione.')));
-    } else if (filtering && !list.children.length) {
-      tree.replaceChildren(h('div', { class: 'empty' }, h('p', {}, 'Brak pasujących notatek.')));
     }
+    renderChrome();
     renderFilterBar();
     updateComposer();
   }
 
+  // przycisk Archiwum (z licznikiem), pasek archiwum i widoczność paska dodawania
+  function renderChrome() {
+    const arch = isArch(), count = state.roots.length - activeRoots().length;
+    const b = $('#btnArchive'), badge = $('.badge', b);
+    b.classList.toggle('active', arch);
+    b.setAttribute('aria-pressed', String(arch));
+    const label = arch ? 'Wróć do notatek' : 'Archiwum' + (count ? ` (${count})` : '');
+    b.setAttribute('aria-label', label); b.title = label;
+    badge.textContent = String(count); badge.hidden = arch || !count;
+    const bar = $('#archbar');
+    bar.hidden = !arch;
+    if (arch) bar.replaceChildren(
+      h('div', {}, h('b', {}, 'Archiwum'), ` · ${count}`),
+      h('p', {}, 'Przeciągnij w prawo, aby przywrócić, w lewo, aby usunąć.'));
+    $('#composer').hidden = arch;
+  }
+
   function buildRow(n, depth, ghost, open) {
     const hasKids = n.children.length > 0;
-    const canDrag = depth === 0 && state.roots.length > 1 && !isFiltering(); // przeciąganie tylko notatek głównych, nie podczas filtrowania
+    const canDrag = depth === 0 && !isArch() && activeRoots().length > 1 && !isFiltering(); // zmiana kolejności tylko notatek głównych, nie podczas filtrowania i nie w archiwum
     return h('div', { class: 'row' + (depth === 0 ? ' top' : '') + (n.id === state.targetId ? ' target' : '') + (ghost ? ' ghost' : '') },
       hasKids
         ? h('button', { class: 'toggle' + (open ? ' open' : ''), type: 'button', 'aria-label': open ? 'Zwiń' : 'Rozwiń',
@@ -333,10 +389,10 @@
         : h('span', { class: 'toggle-spacer' }),
       h('span', { class: 'prefix', 'aria-hidden': 'true' }, '-'.repeat(depth + 1)),
       h('div', {
-        class: 'body' + (canDrag ? ' sortable' : ''), role: 'button', tabindex: '0',
+        class: 'body' + (depth === 0 ? ' sortable' : ''), role: 'button', tabindex: '0',
         onclick: () => { if (Date.now() < noClickUntil) return; openNodeSheet(n.id); },
-        onpointerdown: canDrag ? (e) => armDrag(e, n.id) : null,       // przytrzymaj tytuł, aby przeciągnąć
-        oncontextmenu: canDrag ? (e) => e.preventDefault() : null,
+        onpointerdown: depth === 0 ? (e) => armGesture(e, n.id, canDrag) : null,   // przytrzymanie = kolejność, przesunięcie poziome = archiwum / usuń
+        oncontextmenu: depth === 0 ? (e) => e.preventDefault() : null,
         onkeydown: (e) => {
           if (canDrag && e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {   // Alt + ↑/↓ = przesuń notatkę
             e.preventDefault(); moveNode(n.id, e.key === 'ArrowUp' ? -1 : 1); saveNotes(); render();
@@ -365,21 +421,26 @@
             title: n.fav ? 'Usuń z ulubionych' : 'Dodaj do ulubionych', 'aria-label': n.fav ? 'Usuń z ulubionych' : 'Dodaj do ulubionych',
             onclick: () => { n.fav = !n.fav; saveNotes(); render(); } }, icon('star', '1.15em', !!n.fav))
         : null,
-      h('button', { class: 'add', type: 'button', title: 'Dodaj podwęzeł', 'aria-label': 'Dodaj podwęzeł',
+      isArch() ? null : h('button', { class: 'add', type: 'button', title: 'Dodaj podwęzeł', 'aria-label': 'Dodaj podwęzeł',
         onclick: () => setTarget(n.id) }, icon('plus')));
   }
 
   /* ================= Przeciąganie notatek głównych (zmiana kolejności) ================= */
-  // Dotyk / rysik: przytrzymaj tytuł notatki ~0,4 s bez ruchu, potem przeciągnij.
+  // Zmiana kolejności — dotyk / rysik: przytrzymaj tytuł notatki ~0,4 s bez ruchu, potem przeciągnij.
   // Mysz (komputer): złap tytuł i przesuń o kilka pikseli. Krótkie dotknięcie nadal otwiera okno notatki.
   const HOLD_MS = 380, MOVE_SLOP = 8;
-  let dragging = false;     // trwa przeciąganie — blokuje przewijanie listy palcem
+  let dragging = false;     // trwa przeciąganie lub przesuwanie w bok — blokuje przewijanie listy palcem
   let noClickUntil = 0;     // po przeciągnięciu ignorujemy „kliknięcie” dosyłane po puszczeniu
 
-  function armDrag(e, id) {
+  // Jeden punkt wejścia dla gestów na tytule notatki głównej:
+  //  • przesunięcie poziome: w prawo = archiwizuj (w archiwum: przywróć), w lewo = usuń (z opcją „Cofnij”),
+  //  • przytrzymanie (dotyk) lub złapanie (mysz) i ruch w pionie = zmiana kolejności,
+  //  • ruch palca w pionie przed końcem przytrzymania = zwykłe przewijanie listy.
+  function armGesture(e, id, allowReorder) {
     if (!e.isPrimary || (e.pointerType === 'mouse' && e.button !== 0) || dragging) return;
     const el = e.currentTarget, li = el.closest('li.node'), ul = li && li.parentElement;
-    if (!ul || !ul.classList.contains('root') || ul.children.length !== state.roots.length) return; // lista niepełna (filtr)
+    if (!ul || !ul.classList.contains('root')) return;
+    const reorder = allowReorder && ul.children.length === viewRoots().length;   // lista pełna (bez filtra)
     const pid = e.pointerId, x0 = e.clientX, y0 = e.clientY, mouse = e.pointerType === 'mouse';
     let y = y0, timer = 0;
     const disarm = () => {
@@ -392,13 +453,71 @@
     const onMove = (ev) => {
       if (ev.pointerId !== pid) return;
       y = ev.clientY;
-      if (Math.hypot(ev.clientX - x0, ev.clientY - y0) > MOVE_SLOP) { if (mouse) go(); else disarm(); } // palec ruszył = zwykłe przewijanie
+      const dx = ev.clientX - x0, dy = ev.clientY - y0;
+      if (Math.hypot(dx, dy) <= MOVE_SLOP) return;
+      if (Math.abs(dx) > Math.abs(dy)) { disarm(); beginSwipe(el, li, pid, x0, id); }
+      else if (mouse && reorder) go();
+      else disarm();                                   // palec w pionie = zwykłe przewijanie
     };
-    if (!mouse) timer = setTimeout(go, HOLD_MS);
+    if (!mouse && reorder) timer = setTimeout(go, HOLD_MS);
     try { el.setPointerCapture(pid); } catch (err) { /* ignoruj */ }   // mysz: śledź ruch także poza tytułem
     el.addEventListener('pointermove', onMove);
     el.addEventListener('pointerup', disarm);
     el.addEventListener('pointercancel', disarm);
+  }
+
+  // Przesuwanie notatki w bok: pod spodem tło z etykietą akcji; po przekroczeniu progu puszczenie wykonuje akcję.
+  function beginSwipe(el, li, pid, x0, id) {
+    const row = $('.row', li); if (!row) return;
+    const inArchive = isArch();
+    dragging = true;
+    try { el.setPointerCapture(pid); } catch (err) { /* ignoruj */ }
+    const W = row.offsetWidth, TH = Math.min(120, W * 0.3);
+    li.classList.add('swiping');
+    const bg = h('div', { class: 'swipe-bg' });
+    li.prepend(bg);
+    let dx = 0, dir = 0, armed = false;
+    const setDir = (d) => {
+      if (d === dir) return;
+      dir = d;
+      bg.className = 'swipe-bg ' + (d > 0 ? 'right' : 'left') + (armed ? ' armed' : '');
+      bg.replaceChildren(...(d > 0
+        ? [icon(inArchive ? 'unarchive' : 'archive', '1.3em'), inArchive ? 'Przywróć' : 'Archiwizuj']
+        : [icon('trash', '1.3em'), 'Usuń']));
+    };
+    const update = () => {
+      row.style.transform = `translateX(${dx}px)`;
+      if (dx) setDir(dx > 0 ? 1 : -1);
+      const a = Math.abs(dx) >= TH;
+      if (a !== armed) {
+        armed = a; bg.classList.toggle('armed', a);
+        if (a) { try { navigator.vibrate && navigator.vibrate(12); } catch (err) { /* ignoruj */ } }
+      }
+    };
+    const onMove = (ev) => { if (ev.pointerId !== pid) return; dx = ev.clientX - x0; update(); };
+    const finish = (commit) => {
+      el.removeEventListener('pointermove', onMove);
+      el.removeEventListener('pointerup', onUp);
+      el.removeEventListener('pointercancel', onCancel);
+      dragging = false; noClickUntil = Date.now() + 400;
+      row.style.transition = 'transform .16s ease';
+      if (commit && armed) {
+        const d = dir;
+        row.style.transform = `translateX(${d > 0 ? W : -W}px)`;     // wysuń poza ekran, potem wykonaj akcję
+        setTimeout(() => {
+          if (d > 0) archiveNode(id, !inArchive);
+          else destructive('Notatka usunięta', () => { removeNode(id); state.targetId = null; });
+        }, 170);
+      } else {
+        row.style.transform = '';                                      // za krótko — wróć na miejsce
+        setTimeout(render, 170);
+      }
+    };
+    const onUp = () => finish(true), onCancel = () => finish(false);
+    el.addEventListener('pointermove', onMove);
+    el.addEventListener('pointerup', onUp);
+    el.addEventListener('pointercancel', onCancel);
+    update();
   }
 
   // Podczas przeciągania gałąź jest chowana, żeby dało się ją łatwo przenieść.
@@ -443,8 +562,10 @@
       if (raf) cancelAnimationFrame(raf);
       dragging = false; noClickUntil = Date.now() + 400;
       if (commit && to !== from) {
-        const [moved] = state.roots.splice(from, 1);
-        state.roots.splice(to, 0, moved);
+        // indeksy dotyczą widocznej listy; notatki z archiwum zostają na swoich miejscach w tablicy
+        const vis = activeRoots(), moved = vis[from], rest = vis.filter((x) => x !== moved);
+        state.roots.splice(state.roots.indexOf(moved), 1);
+        state.roots.splice(to < rest.length ? state.roots.indexOf(rest[to]) : state.roots.indexOf(rest[rest.length - 1]) + 1, 0, moved);
         saveNotes(); render(); flash(id);
       } else render();               // odtwarza widok (czyści transformacje)
     };
@@ -495,7 +616,7 @@
     $('#cCtx').hidden = !t;
     if (t) $('#cCtxText').textContent = plain(t.node.text);
     $('#cOut').disabled = !t;
-    $('#cIn').disabled = (t ? t.node.children : state.roots).length === 0;
+    $('#cIn').disabled = (t ? t.node.children : activeRoots()).length === 0;
     $('#cInput').placeholder = t ? 'Nowy podwęzeł…' : 'Nowa notatka…';
   }
 
@@ -510,7 +631,7 @@
     }
   }
   const goDeeper = () => {
-    const l = state.targetId ? locate(state.targetId).node.children : state.roots;
+    const l = state.targetId ? locate(state.targetId).node.children : activeRoots();
     if (l.length) setTarget(l[l.length - 1].id);
   };
   const goOut = () => {
@@ -660,14 +781,18 @@
       h('div', { class: 'field' },
         h('span', { class: 'lbl' }, 'Struktura'),
         h('div', { class: 'grid4' },
-          tool('up', 'W górę', index > 0, (id) => moveNode(id, -1)),
-          tool('down', 'W dół', index < list.length - 1, (id) => moveNode(id, 1)),
-          tool('indent', 'Wcięcie', index > 0, indentNode),
+          tool('up', 'W górę', siblingIndex(loc, -1) >= 0, (id) => moveNode(id, -1)),
+          tool('down', 'W dół', siblingIndex(loc, 1) >= 0, (id) => moveNode(id, 1)),
+          tool('indent', 'Wcięcie', siblingIndex(loc, -1) >= 0, indentNode),
           tool('outdent', 'Wysuń', !!parent, outdentNode))),
 
-      h('div', { class: 'two' },
+      isArch() ? null : h('div', { class: 'two' },
         h('button', { class: 'btn', type: 'button', onclick: () => { const id = sheetCtx.id; commitSheet(); $('#sheet').close(); setTarget(id); } }, icon('plus'), 'Podwęzeł'),
         h('button', { class: 'btn', type: 'button', onclick: () => { const p = parent ? parent.id : null; commitSheet(); $('#sheet').close(); setTarget(p); } }, icon('plus'), 'Obok')),
+
+      isRoot ? h('div', { class: 'stack', style: 'margin-top:.5rem' },
+        h('button', { class: 'btn', type: 'button', onclick: () => archiveFromSheet() },
+          icon(node.archived ? 'unarchive' : 'archive'), node.archived ? 'Przywróć z archiwum' : 'Przenieś do archiwum')) : null,
 
       h('div', { class: 'two', style: 'margin-top:.5rem' },
         h('button', { class: 'btn', type: 'button', onclick: () => exportBranch(false) }, icon('download'), isRoot ? 'Eksport notatki .md' : 'Eksport gałęzi .md'),
@@ -693,6 +818,14 @@
     commitSheet();
     const l = locate(sheetCtx.id); if (!l) return;
     exportMap(format, [l.node], plain(l.node.text));
+  }
+
+  function archiveFromSheet() {
+    const id = sheetCtx.id, l = locate(id); if (!l || l.parent) return;
+    const to = !l.node.archived;
+    commitSheet(); sheetCtx = null;
+    $('#sheet').close();
+    archiveNode(id, to);
   }
 
   async function deleteFromSheet() {
@@ -738,7 +871,7 @@
       if (depth <= 1) {
         blank();
         lines.push('#'.repeat(depth + 1) + ' ' + text);
-        if (depth === 0) lines.push(`<!-- ${[exportDate(n.created), ...(n.fav ? ['★'] : []), ...n.tags.map((t) => '#' + t)].join(' ')} -->`);
+        if (depth === 0) lines.push(`<!-- ${[exportDate(n.created), ...(n.fav ? ['★'] : []), ...(n.archived ? ['📦'] : []), ...n.tags.map((t) => '#' + t)].join(' ')} -->`);
         lines.push('');
       } else {
         lines.push('  '.repeat(depth - 2) + '- ' + text);
@@ -785,7 +918,7 @@
     const dm = /(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/.exec(s);
     const tags = [];
     String(s).replace(TAG_RE, (m, pre, t) => { const c = cleanTag(t); if (c) tags.push(c); return m; });
-    return { created: dm ? toIso(dm[1], dm[2], dm[3], dm[4], dm[5]) : null, tags: uniq(tags), fav: /★/.test(s) };
+    return { created: dm ? toIso(dm[1], dm[2], dm[3], dm[4], dm[5]) : null, tags: uniq(tags), fav: /★/.test(s), archived: /📦/.test(s) };
   }
 
   // Rozumie format markmap (# / ## / listy z wcięciami), zwykłe listy z wcięciami (-, *, +, 1.)
@@ -838,6 +971,7 @@
         const meta = parseMeta(m[1]);
         if (meta.created) last.created = meta.created;
         if (meta.fav) last.fav = true;
+        if (meta.archived) last.archived = true;
         last.tags = uniq([...last.tags, ...meta.tags]);
       }
     }
@@ -1020,7 +1154,7 @@
   }
 
   // format: 'svg' | 'png' | 'html'; nodes = cały notatnik albo jedna notatka / gałąź
-  async function exportMap(format, nodes = state.roots, title = '') {
+  async function exportMap(format, nodes = activeRoots(), title = '') {
     if (!nodes.length) { toast('Nie ma jeszcze czego eksportować.'); return; }
     toast('Przygotowuję mapę myśli…', { duration: 0 });
     try {
@@ -1159,7 +1293,7 @@
       h('div', { class: 'section' },
         h('h3', {}, 'Mapa myśli'),
         mapButtons((f) => exportMap(f)),
-        h('p', { class: 'hint' }, 'Eksport całego notatnika jako mapa markmap: SVG (grafika wektorowa), PNG (obraz) albo HTML (interaktywna mapa z przybliżaniem, działa bez internetu). Pojedynczą notatkę lub gałąź wyeksportujesz w jej oknie. Mapa zawiera wszystkie gałęzie, także zwinięte.')),
+        h('p', { class: 'hint' }, 'Eksport całego notatnika jako mapa markmap: SVG (grafika wektorowa), PNG (obraz) albo HTML (interaktywna mapa z przybliżaniem, działa bez internetu). Pojedynczą notatkę lub gałąź wyeksportujesz w jej oknie. Mapa zawiera wszystkie gałęzie, także zwinięte, ale bez notatek z archiwum.')),
 
       h('div', { class: 'section' },
         h('h3', {}, 'Kopia zapasowa'),
@@ -1203,6 +1337,8 @@
     applySettings();
     mqDark.addEventListener && mqDark.addEventListener('change', applySettings);
 
+    $('#btnArchive').append(icon('archive'), h('span', { class: 'badge', hidden: true }));
+    $('#btnArchive').addEventListener('click', () => setView(isArch() ? 'main' : 'archive'));
     $('#btnSearch').append(icon('search'));
     $('#btnSettings').append(icon('settings'));
     $('#btnSettings').addEventListener('click', openSettings);
