@@ -52,6 +52,7 @@ więc mapa ich nie wyświetla:
   - temporary 1
   - temporary 2
     - temporary 2.1
+    - temporary 2.2
 
 ## During
 
