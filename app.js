@@ -959,7 +959,11 @@
   async function expandVerses(text) {
     if (!hasVerseRef(text)) return text;
     try { await ensureBible(); }
-    catch (e) { toast('Nie udało się wczytać tekstu Biblii (brak pliku offline?).', { duration: 6000 }); return text; }
+    catch (e) {
+      const why = location.protocol === 'file:' ? 'otwarto z pliku — uruchom aplikację przez adres http(s)'
+        : /HTTP 404/.test(e.message) ? 'brak pliku lib/ubg.json na serwerze (błąd 404)' : (e.message || 'błąd sieci');
+      toast(`Nie udało się wczytać tekstu Biblii: ${why}.`, { duration: 9000 }); return text;
+    }
     const { text: out, missing } = expandVersesSync(text);
     if (missing.length) toast(`Nie znaleziono wersetu: ${missing.join(', ')}`, { duration: 6000 });
     return out;
