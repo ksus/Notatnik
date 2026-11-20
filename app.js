@@ -841,9 +841,13 @@
     setTarget(l.parent ? l.parent.id : null);
   };
 
-  function submitComposer() {
+  let composerBusy = false;
+  async function submitComposer() {
+    if (composerBusy) return;
     const input = $('#cInput');
-    const node = addNode(state.targetId, input.value);
+    let raw = input.value;
+    if (hasVerseRef(raw)) { composerBusy = true; try { raw = await expandVerses(raw); } finally { composerBusy = false; } }
+    const node = addNode(state.targetId, raw);
     if (!node) return;
     input.value = '';
     saveNotes(); render(); flash(node.id);
@@ -875,6 +879,92 @@
     }
   }
 
+  /* ================= Wersety biblijne (UBG, offline) =================
+     Wpisz np. @J 3,16 · @Ps 23,1-3 · @1 Kor 13,4-7 · @Rz 8,28.30 · @Ps 23 (cały rozdział)
+     i zatwierdź notatkę — namiar zamieni się w tekst wersetu. Tekst: lib/ubg.json (Uwspółcześniona Biblia Gdańska). */
+  const BIBLE_URL = 'lib/ubg.json';
+  const VERSE_RE_SRC = '@((?:[1-3]\\s?)?[\\p{L}]+\\.?)\\s*(\\d+)(?:\\s*[,:]\\s*(\\d+(?:\\s*[-–]\\s*\\d+)?(?:\\s*[.;]\\s*\\d+(?:\\s*[-–]\\s*\\d+)?)*))?';
+  const BOOK_ALIASES = {
+    GEN: 'rdz genesis 1mojzeszowa 1mojz 1m rodzaju ksiegarodzaju', EXO: 'wj exodus 2mojzeszowa 2mojz 2m wyjscia ksiegawyjscia',
+    LEV: 'kpl lev 3mojzeszowa 3mojz 3m kaplanska kaplanska', NUM: 'lb num 4mojzeszowa 4mojz 4m liczb', DEU: 'pwt deut 5mojzeszowa 5mojz 5m powtorzonegoprawa',
+    JOS: 'joz jozuego', JDG: 'sdz sedziow', RUT: 'rt rut', '1SA': '1sm 1sam 1samuela', '2SA': '2sm 2sam 2samuela',
+    '1KI': '1krl 1krolewska 1krolow', '2KI': '2krl 2krolewska 2krolow', '1CH': '1krn 1kron 1kronik', '2CH': '2krn 2kron 2kronik',
+    EZR: 'ezd ezdrasza', NEH: 'ne neh nehemiasza', EST: 'est estery', JOB: 'hi job hiob hioba', PSA: 'ps psalm psalmy psalmow psalmu',
+    PRO: 'prz przyp przypowiesci przyslow', ECC: 'koh kazn kaz kaznodziei koheleta', SNG: 'pnp piesn piesnnapiesni piesnnadpiesniami',
+    ISA: 'iz izaj izajasza', JER: 'jr jer jeremiasza', LAM: 'lm tr treny lamentacje', EZK: 'ez ezech ezechiela', DAN: 'dn dan daniela',
+    HOS: 'oz ozeasza', JOL: 'jl joela', AMO: 'am amosa', OBA: 'ab abd abdiasza', JON: 'jon jonasza', MIC: 'mi mic mich micheasza',
+    NAM: 'na nah nahuma', HAB: 'ha hab habakuka', ZEP: 'so sof sofoniasza', HAG: 'ag aggeusza', ZEC: 'za zach zachariasza', MAL: 'ml mal malachiasza',
+    MAT: 'mt mat mateusza', MRK: 'mk mar marka', LUK: 'lk luk lukasza', JHN: 'j jan jana', ACT: 'dz dzieje dziejow dziejeapostolskie',
+    ROM: 'rz rzym rzymian', '1CO': '1kor 1koryntian', '2CO': '2kor 2koryntian', GAL: 'ga gal galacjan', EPH: 'ef efez efezjan',
+    PHP: 'flp filip filipian', COL: 'kol kolosan', '1TH': '1tes 1tesaloniczan', '2TH': '2tes 2tesaloniczan', '1TI': '1tm 1tym 1tymoteusza',
+    '2TI': '2tm 2tym 2tymoteusza', TIT: 'tt tyt tytusa', PHM: 'flm filem filemona', HEB: 'hbr hebr hebrajczykow', JAS: 'jk jak jakuba',
+    '1PE': '1p 1pt 1pio 1piotra', '2PE': '2p 2pt 2pio 2piotra', '1JN': '1j 1jan 1jana', '2JN': '2j 2jan 2jana', '3JN': '3j 3jan 3jana',
+    JUD: 'jud judy', REV: 'ap obj apokalipsa objawienie objawienia',
+  };
+  const bkNorm = (s) => s.toLowerCase().replace(/ł/g, 'l').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[\s.]/g, '');
+  let bibleData = null, bibleLoading = null, bibleAliases = null;
+
+  function ensureBible() {
+    if (bibleData) return Promise.resolve(bibleData);
+    if (!bibleLoading) bibleLoading = fetch(BIBLE_URL).then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then((d) => {
+        bibleData = d; bibleAliases = new Map();
+        for (const [id, list] of Object.entries(BOOK_ALIASES)) for (const a of list.split(' ')) bibleAliases.set(a, id);
+        for (const [id, b] of Object.entries(d.books)) { bibleAliases.set(bkNorm(b.a), id); bibleAliases.set(bkNorm(b.n), id); }
+        return d;
+      })
+      .catch((e) => { bibleLoading = null; throw e; });
+    return bibleLoading;
+  }
+
+  function bibleBookId(name) {
+    const k = bkNorm(name);
+    if (bibleAliases.has(k)) return bibleAliases.get(k);
+    if (k.length < 3) return null;
+    const hits = new Set(); for (const [a, id] of bibleAliases) if (a.startsWith(k)) hits.add(id);
+    return hits.size === 1 ? [...hits][0] : null;
+  }
+
+  // Zamienia jedno dopasowanie regexa na tekst wersetów; null = nie znaleziono
+  function bibleLookup(bookName, chapter, spec) {
+    const id = bibleBookId(bookName); if (!id) return null;
+    const book = bibleData.books[id], ch = book.c[+chapter - 1]; if (!ch) return null;
+    const nums = [];
+    if (!spec) for (let i = 1; i <= ch.length; i++) nums.push(i);
+    else for (const part of spec.split(/[.;]/)) {
+      const m = part.match(/(\d+)(?:\s*[-–]\s*(\d+))?/); if (!m) return null;
+      const a = +m[1], b = m[2] ? +m[2] : a;
+      if (a < 1 || b < a || b > ch.length) return null;
+      for (let i = a; i <= b; i++) nums.push(i);
+    }
+    if (!nums.length) return null;
+    const body = nums.length === 1 ? ch[nums[0] - 1] : nums.map((n) => `[${n}] ${ch[n - 1]}`).join(' ');
+    const label = `${book.a} ${chapter}${spec ? ',' + spec.replace(/\s+/g, '').replace(/[–]/g, '-') : ''}`;
+    return `„${body}” (${label} UBG)`;
+  }
+
+  const hasVerseRef = (text) => new RegExp(VERSE_RE_SRC, 'u').test(text);
+
+  // Synchronicznie (gdy Biblia już wczytana); zwraca { text, missing[] }
+  function expandVersesSync(text) {
+    const missing = [];
+    const out = text.replace(new RegExp(VERSE_RE_SRC, 'gu'), (all, book, ch, spec) => {
+      const r = bibleLookup(book, ch, spec);
+      if (r == null) { missing.push(all); return all; }
+      return r;
+    });
+    return { text: out, missing };
+  }
+
+  async function expandVerses(text) {
+    if (!hasVerseRef(text)) return text;
+    try { await ensureBible(); }
+    catch (e) { toast('Nie udało się wczytać tekstu Biblii (brak pliku offline?).', { duration: 6000 }); return text; }
+    const { text: out, missing } = expandVersesSync(text);
+    if (missing.length) toast(`Nie znaleziono wersetu: ${missing.join(', ')}`, { duration: 6000 });
+    return out;
+  }
+
   /* ================= Arkusz notatki ================= */
   let sheetCtx = null; // { id, tags[] }
 
@@ -890,7 +980,12 @@
     const loc = locate(sheetCtx.id); if (!loc) return;
     const txt = $('#sText'), tagIn = $('#sTag');
     if (txt) {
-      const p = parseEntry(txt.value, loc.depth === 0);
+      let val = txt.value;
+      if (hasVerseRef(val)) {
+        if (bibleData) { const r = expandVersesSync(val); val = r.text; if (r.missing.length) toast(`Nie znaleziono wersetu: ${r.missing.join(', ')}`, { duration: 6000 }); }
+        else { const nid = loc.node.id; ensureBible().then(() => { const l = locate(nid); if (l) { l.node.text = expandVersesSync(l.node.text).text; saveNotes(); render(); } }).catch(() => toast('Nie udało się wczytać tekstu Biblii.')); }
+      }
+      const p = parseEntry(val, loc.depth === 0);
       if (p.text) loc.node.text = p.text;
       sheetCtx.tags = uniq([...sheetCtx.tags, ...p.tags]);
     }
@@ -1509,6 +1604,11 @@
         h('p', { class: 'hint' }, 'Notatki są zapisane tylko w tej przeglądarce (na tym urządzeniu). Rób eksport od czasu do czasu — wyczyszczenie danych przeglądarki je usuwa (razem z automatycznymi kopiami).')),
 
       bkSection(dlg),
+
+      h('div', { class: 'section' },
+        h('h3', {}, 'Wersety biblijne'),
+        h('p', { class: 'hint' }, 'Wpisz w notatce @ i namiar, np. @J 3,16 · @Ps 23,1-3 · @1 Kor 13,4-7 · @Rz 8,28.30 · @Ps 23 (cały rozdział) — po zatwierdzeniu zamieni się w tekst wersetu. Działa offline.'),
+        h('p', { class: 'hint' }, 'Tekst: Uwspółcześniona Biblia Gdańska (UBG), © 2018 Fundacja Wrota Nadziei, licencja CC BY-ND 4.0 (tekst bez zmian). Źródło: ebible.org/details.php?id=polubg')),
 
       (deferredInstall || iosHint) ? h('div', { class: 'section' },
         h('h3', {}, 'Aplikacja'),

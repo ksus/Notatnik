@@ -70,6 +70,19 @@ Mapa jest rysowana w aplikacji biblioteką [markmap](https://github.com/markmap/
 - Mapa zawiera wszystkie gałęzie, także zwinięte w aplikacji. Tagi i data nie są rysowane.
 - Aktualizacja bibliotek: `lib/README.txt`.
 
+## Wersety biblijne (offline)
+
+W notatce wpisz `@` i namiar, np. `@J 3,16`, `@Ps 23,1-3`, `@1 Kor 13,4-7`, `@Rz 8,28.30` albo `@Ps 23` (cały rozdział).
+Po zatwierdzeniu (Enter w polu nowej notatki albo zamknięcie okna notatki) namiar zamienia się w tekst:
+`„…” (J 3,16 UBG)`; przy kilku wersetach każdy ma numer w nawiasie `[16]`. Rozpoznawane są polskie skróty (Rdz, Ps, Mt, Łk, J, Rz, 1Kor, Hbr, Obj…) i pełne nazwy (Jan, Jana, Psalm, Rzymian…).
+Nierozpoznany namiar zostaje bez zmian, a aplikacja pokaże komunikat.
+
+- Tekst: **Uwspółcześniona Biblia Gdańska (UBG)**, © 2018 Fundacja Wrota Nadziei, licencja **CC BY-ND 4.0** — tekst wolno rozpowszechniać
+  bez zmian słów i interpunkcji, z podaniem praw autorskich i źródła (jest w Ustawieniach). Źródło: <https://ebible.org/details.php?id=polubg>.
+- Plik `lib/ubg.json` (~4 MB, ~1,3 MB po kompresji) jest ładowany dopiero przy pierwszym użyciu i trzymany w osobnym cache service workera
+  (`bible-ubg-v1`), więc nie pobiera się go przy każdej aktualizacji aplikacji. Po zmianie pliku zmień nazwę `BIBLE_CACHE` w `sw.js`.
+- Plik wygenerowano z `polubg_usfm.zip` (eBible.org): usunięto tylko znaczniki USFM (w tym `\add` oznaczające słowa dodane przez tłumaczy), słowa i interpunkcja bez zmian.
+
 ## Aktualizacje
 
 Aplikacja działa offline dzięki service workerowi (`sw.js`). Po zmianie dowolnego pliku **zwiększ `VERSION` w `sw.js`**
