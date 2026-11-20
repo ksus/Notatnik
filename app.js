@@ -580,10 +580,10 @@
         : h('span', { class: 'toggle-spacer' }),
       h('span', { class: 'prefix', 'aria-hidden': 'true' }, '-'.repeat(depth + 1)),
       h('div', {
-        class: 'body' + (depth === 0 ? ' sortable' : ''), role: 'button', tabindex: '0',
+        class: 'body sortable', role: 'button', tabindex: '0',
         onclick: () => { if (Date.now() < noClickUntil) return; openNodeSheet(n.id); },
-        onpointerdown: depth === 0 ? (e) => armGesture(e, n.id, canDrag) : null,   // przytrzymanie = kolejność, przesunięcie poziome = archiwum / usuń
-        oncontextmenu: depth === 0 ? (e) => e.preventDefault() : null,
+        onpointerdown: (e) => armGesture(e, n.id, canDrag),   // główne: przytrzymanie = kolejność, w bok = archiwum / usuń; podwęzły: w lewo = usuń
+        oncontextmenu: (e) => e.preventDefault(),
         onkeydown: (e) => {
           if (canDrag && e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {   // Alt + ↑/↓ = przesuń notatkę
             e.preventDefault(); moveNode(n.id, e.key === 'ArrowUp' ? -1 : 1); saveNotes(); render();
@@ -631,8 +631,9 @@
   function armGesture(e, id, allowReorder) {
     if (!e.isPrimary || (e.pointerType === 'mouse' && e.button !== 0) || dragging) return;
     const el = e.currentTarget, li = el.closest('li.node'), ul = li && li.parentElement;
-    if (!ul || !ul.classList.contains('root')) return;
-    const reorder = allowReorder && ul.children.length === viewRoots().length;   // lista pełna (bez filtra)
+    if (!ul) return;
+    const isRoot = ul.classList.contains('root');   // podwęzły: tylko przesunięcie w lewo (usuń), bez zmiany kolejności i archiwizacji
+    const reorder = isRoot && allowReorder && ul.children.length === viewRoots().length;   // lista pełna (bez filtra)
     const pid = e.pointerId, x0 = e.clientX, y0 = e.clientY, mouse = e.pointerType === 'mouse';
     let x = x0, y = y0, timer = 0;
     const disarm = () => {
@@ -647,7 +648,7 @@
       x = ev.clientX; y = ev.clientY;
       const dx = x - x0, dy = y - y0;
       if (Math.hypot(dx, dy) <= MOVE_SLOP) return;
-      if (Math.abs(dx) > Math.abs(dy)) { disarm(); beginSwipe(el, li, pid, x0, id); }
+      if (Math.abs(dx) > Math.abs(dy)) { disarm(); beginSwipe(el, li, pid, x0, id, !isRoot); }
       else if (mouse && reorder) go();
       else disarm();                                   // palec w pionie = zwykłe przewijanie
     };
@@ -659,7 +660,7 @@
   }
 
   // Przesuwanie notatki w bok: pod spodem tło z etykietą akcji; po przekroczeniu progu puszczenie wykonuje akcję.
-  function beginSwipe(el, li, pid, x0, id) {
+  function beginSwipe(el, li, pid, x0, id, leftOnly = false) {
     const row = $('.row', li); if (!row) return;
     const inArchive = isArch();
     dragging = true;
@@ -686,7 +687,7 @@
         if (a) { try { navigator.vibrate && navigator.vibrate(12); } catch (err) { /* ignoruj */ } }
       }
     };
-    const onMove = (ev) => { if (ev.pointerId !== pid) return; dx = ev.clientX - x0; update(); };
+    const onMove = (ev) => { if (ev.pointerId !== pid) return; dx = ev.clientX - x0; if (leftOnly && dx > 0) dx = 0; update(); };
     let done = false;
     const finish = (commit) => {
       if (done) return; done = true; gestureEnd = null;
