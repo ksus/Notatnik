@@ -4,7 +4,7 @@
   /* ================= Stałe i stan ================= */
   const KEY_NOTES = 'drzewko.notes.v1';
   const KEY_SETTINGS = 'drzewko.settings.v1';
-  const DEFAULT_SETTINGS = { theme: 'system', fontSize: 17, exportStyle: 'dashes' };
+  const DEFAULT_SETTINGS = { theme: 'system', fontSize: 17, exportStyle: 'dashes', bkSince: 0, lastExternalBackup: 0, lastFileBackup: 0, bkRemindedAt: 0 };
   const FS_MIN = 13;
   const FS_MAX = 26;
 
@@ -170,11 +170,186 @@
   }
 
   function saveNotes() {
-    try { localStorage.setItem(KEY_NOTES, JSON.stringify({ v: 1, roots: state.roots })); }
+    try { localStorage.setItem(KEY_NOTES, JSON.stringify({ v: 1, roots: state.roots })); bkAfterSave(); }
     catch (e) { toast('Nie udało się zapisać — brak miejsca w pamięci przeglądarki?'); }
   }
   function saveSettings() {
     try { localStorage.setItem(KEY_SETTINGS, JSON.stringify(state.settings)); } catch (e) { /* ignoruj */ }
+  }
+
+  /* ================= Automatyczne kopie zapasowe =================
+     Warstwa 1: migawki w IndexedDB (ostatnie 10), przywracanie w Ustawieniach.
+     Warstwa 2: automatyczny zapis pliku .md na dysku (File System Access API — Chrome/Edge na komputerze).
+     Warstwa 3: przypomnienie o kopii zewnętrznej (eksport / udostępnij), gdy minął tydzień. */
+  const BK = { DB: 'drzewko.backup', MAX: 10, GAP: 3 * 3600e3, REMIND: 7 * 864e5, FILE_DELAY: 20000, SNAP_DELAY: 5000 };
+  const bkFileSupported = typeof window.showSaveFilePicker === 'function';
+  let bkDbP = null, bkSnapTimer = 0, bkFileTimer = 0, bkHandle = null, bkFileStatus = '';   // '', 'ok', 'perm', 'err'
+
+  function bkOpen() {
+    if (!bkDbP) bkDbP = new Promise((res, rej) => {
+      if (!window.indexedDB) return rej(new Error('Brak IndexedDB'));
+      const r = indexedDB.open(BK.DB, 1);
+      r.onupgradeneeded = () => { r.result.createObjectStore('snaps', { keyPath: 'ts' }); r.result.createObjectStore('kv'); };
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => rej(r.error);
+    });
+    return bkDbP;
+  }
+  async function bkReq(store, mode, fn) {
+    const db = await bkOpen();
+    return new Promise((res, rej) => {
+      const tx = db.transaction(store, mode);
+      const r = fn(tx.objectStore(store));
+      tx.oncomplete = () => res(r && r.result);
+      tx.onerror = tx.onabort = () => rej(tx.error);
+    });
+  }
+  const bkHash = (s) => { let x = 5381; for (let i = 0; i < s.length; i++) x = ((x << 5) + x + s.charCodeAt(i)) | 0; return s.length + ':' + x; };
+  async function bkList() {
+    const all = (await bkReq('snaps', 'readonly', (s) => s.getAll())) || [];
+    return all.sort((a, b) => b.ts - a.ts);
+  }
+
+  // Migawka bieżących notatek. Pomija, gdy nic się nie zmieniło; bez force — także gdy ostatnia jest świeższa niż GAP.
+  async function bkSnapshot(reason, { force = false } = {}) {
+    if (!state.roots.length) return false;
+    const json = JSON.stringify(state.roots);       // zrzut w chwili wywołania (zanim operacja zmieni dane)
+    const count = countNodes(state.roots);
+    const hash = bkHash(json);
+    try {
+      const last = (await bkList())[0];
+      if (last && last.hash === hash) return false;
+      if (!force && last && Date.now() - last.ts < BK.GAP) return false;
+      let ts = Date.now(); if (last && ts <= last.ts) ts = last.ts + 1;
+      await bkReq('snaps', 'readwrite', (s) => s.put({ ts, hash, count, reason, data: json }));
+      for (const old of (await bkList()).slice(BK.MAX)) await bkReq('snaps', 'readwrite', (s) => s.delete(old.ts));
+      return true;
+    } catch (e) { console.warn('Migawka nie powiodła się', e); return false; }
+  }
+
+  function bkMarkExternal() { state.settings.lastExternalBackup = Date.now(); saveSettings(); }
+
+  // Warstwa 2: zapis pliku
+  async function bkLoadHandle() {
+    if (!bkFileSupported) return;
+    try {
+      bkHandle = (await bkReq('kv', 'readonly', (s) => s.get('fileHandle'))) || null;
+      if (bkHandle) bkFileStatus = (await bkHandle.queryPermission({ mode: 'readwrite' })) === 'granted' ? 'ok' : 'perm';
+    } catch (e) { bkHandle = null; }
+  }
+  async function bkWriteFile() {
+    if (!bkHandle) return false;
+    try {
+      if ((await bkHandle.queryPermission({ mode: 'readwrite' })) !== 'granted') { bkFileStatus = 'perm'; return false; }
+      const w = await bkHandle.createWritable();
+      await w.write(toMarkdown(state.roots));
+      await w.close();
+      bkFileStatus = 'ok';
+      state.settings.lastFileBackup = Date.now();
+      bkMarkExternal();
+      return true;
+    } catch (e) { bkFileStatus = 'err'; return false; }
+  }
+  async function bkChooseFile() {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: 'drzewko-kopia.md',
+        types: [{ description: 'Markdown', accept: { 'text/markdown': ['.md'] } }],
+      });
+      bkHandle = handle;
+      await bkReq('kv', 'readwrite', (s) => s.put(handle, 'fileHandle'));
+      bkFileStatus = 'ok';
+      return bkWriteFile();
+    } catch (e) { return false; }      // anulowano wybór
+  }
+  async function bkGrantFile() {
+    try {
+      if (bkHandle && (await bkHandle.requestPermission({ mode: 'readwrite' })) === 'granted') { bkFileStatus = 'ok'; return bkWriteFile(); }
+    } catch (e) { /* ignoruj */ }
+    return false;
+  }
+  async function bkForgetFile() {
+    bkHandle = null; bkFileStatus = '';
+    try { await bkReq('kv', 'readwrite', (s) => s.delete('fileHandle')); } catch (e) { /* ignoruj */ }
+  }
+
+  // Wywoływane po każdym zapisie notatek
+  function bkAfterSave() {
+    clearTimeout(bkSnapTimer); bkSnapTimer = setTimeout(() => bkSnapshot('auto'), BK.SNAP_DELAY);
+    if (bkHandle) { clearTimeout(bkFileTimer); bkFileTimer = setTimeout(bkWriteFile, BK.FILE_DELAY); }
+  }
+
+  async function bkRestore(snap) {
+    let roots;
+    try { roots = sanitizeNodes(JSON.parse(snap.data)); } catch (e) { toast('Ta kopia jest uszkodzona.'); return; }
+    await bkSnapshot('przed przywróceniem', { force: true });
+    state.roots = roots; state.targetId = null;
+    saveNotes(); render();
+    toast(`Przywrócono kopię z ${fmtDate(new Date(snap.ts).toISOString())}`, { duration: 5000 });
+  }
+
+  function bkInit() {
+    const s = state.settings;
+    if (!s.bkSince) { s.bkSince = Date.now(); saveSettings(); }
+    bkLoadHandle().then(() => { if (bkHandle && bkFileStatus === 'ok') bkWriteFile(); });
+    setTimeout(() => bkSnapshot('start'), 3000);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') { bkSnapshot('auto'); if (bkHandle) bkWriteFile(); }
+    });
+    // Warstwa 3: przypomnienie
+    setTimeout(() => {
+      if (!state.roots.length) return;
+      const last = s.lastExternalBackup || s.bkSince;
+      if (Date.now() - last < BK.REMIND || Date.now() - (s.bkRemindedAt || 0) < 864e5) return;
+      s.bkRemindedAt = Date.now(); saveSettings();
+      const days = Math.floor((Date.now() - last) / 864e5);
+      toast(`Ostatnia kopia poza aplikacją: ${s.lastExternalBackup ? days + ' dni temu' : 'brak'}. Zapisz ją w chmurze lub wyślij sobie.`,
+        { action: 'Zrób kopię', duration: 15000, onAction: () => shareMd() });
+    }, 6000);
+  }
+
+  // Sekcja w Ustawieniach
+  function bkSection(dlg) {
+    const list = h('div', { class: 'stack' });
+    const fillList = async () => {
+      let snaps = [];
+      try { snaps = await bkList(); } catch (e) { /* brak IndexedDB */ }
+      list.replaceChildren(...(snaps.length ? snaps.map((sn) => h('div', { class: 'two', style: 'align-items:center' },
+        h('span', { class: 'hint', style: 'margin:0' }, `${fmtDate(new Date(sn.ts).toISOString())} · ${sn.count} not.`),
+        h('button', { class: 'btn', type: 'button', onclick: async () => {
+          const ans = await ask({ title: 'Przywrócić tę kopię?', message: `Obecne notatki zostaną zastąpione kopią z ${fmtDate(new Date(sn.ts).toISOString())} (${sn.count} notatek). Aktualny stan zapiszemy jeszcze jako osobną kopię.`,
+            actions: [{ value: 'ok', label: 'Przywróć', kind: 'danger' }, { value: '', label: 'Anuluj' }] });
+          if (ans === 'ok') { dlg.close(); bkRestore(sn); }
+        } }, 'Przywróć'))) : [h('p', { class: 'hint' }, 'Brak kopii — pierwsza powstanie automatycznie po zapisaniu notatek.')]));
+    };
+    fillList();
+
+    const status = h('p', { class: 'hint' });
+    const fileBox = h('div', { class: 'stack', style: 'margin-top:.5rem' });
+    const fillFile = () => {
+      if (!bkFileSupported) { fileBox.replaceChildren(); return; }
+      const when = state.settings.lastFileBackup ? fmtDate(new Date(state.settings.lastFileBackup).toISOString()) : 'jeszcze nie zapisano';
+      const btns = [];
+      if (!bkHandle) btns.push(h('button', { class: 'btn', type: 'button', onclick: async () => { await bkChooseFile(); fillFile(); } }, icon('download'), 'Wybierz plik kopii na dysku…'));
+      else {
+        if (bkFileStatus === 'perm') btns.push(h('button', { class: 'btn primary', type: 'button', onclick: async () => { await bkGrantFile(); fillFile(); } }, 'Zezwól na zapis do pliku'));
+        btns.push(h('button', { class: 'btn', type: 'button', onclick: async () => { await bkWriteFile(); fillFile(); } }, 'Zapisz do pliku teraz'));
+        btns.push(h('button', { class: 'btn', type: 'button', onclick: async () => { await bkForgetFile(); fillFile(); } }, 'Wyłącz zapis do pliku'));
+      }
+      status.textContent = !bkHandle ? 'Aplikacja może sama aktualizować plik .md na dysku (np. w folderze zsynchronizowanym z OneDrive/Dyskiem Google).'
+        : bkFileStatus === 'perm' ? 'Przeglądarka wymaga ponownego zezwolenia na zapis — kliknij przycisk poniżej.'
+        : bkFileStatus === 'err' ? 'Nie udało się zapisać pliku. Spróbuj ponownie lub wybierz inny plik.'
+        : `Plik jest aktualizowany automatycznie po zmianach. Ostatni zapis: ${when}.`;
+      fileBox.replaceChildren(...btns);
+    };
+    fillFile();
+
+    return h('div', { class: 'section' },
+      h('h3', {}, 'Automatyczne kopie'),
+      h('p', { class: 'hint' }, `Aplikacja sama zapisuje w tej przeglądarce do ${BK.MAX} ostatnich kopii (po zmianach, nie częściej niż co kilka godzin; zawsze przed importem i usunięciem wszystkiego).`),
+      list,
+      bkFileSupported ? status : null, fileBox,
+      h('p', { class: 'hint' }, 'Kopie w przeglądarce znikną razem z jej danymi — dlatego od czasu do czasu zrób też eksport .md lub „Udostępnij…”.'));
   }
 
   /* ================= Operacje na drzewie ================= */
@@ -265,7 +440,8 @@
   }
 
   // Operacja z możliwością cofnięcia (toast „Cofnij”)
-  function destructive(message, fn) {
+  function destructive(message, fn, { backup = false } = {}) {
+    if (backup) bkSnapshot('przed operacją', { force: true });
     const before = JSON.stringify(state.roots);
     fn(); saveNotes(); render();
     toast(message, {
@@ -1019,6 +1195,7 @@
 
   // nodes = cały notatnik (domyślnie) albo jedna notatka / gałąź: exportMd([węzeł], tytuł)
   function exportMd(nodes = state.roots, title = '') {
+    if (nodes === state.roots) bkMarkExternal();
     if (!nodes.length) { toast('Nie ma jeszcze czego eksportować.'); return; }
     downloadBlob(new Blob([toMarkdown(nodes)], { type: 'text/markdown;charset=utf-8' }), fileName(title));
     toast('Wyeksportowano ' + countNodes(nodes) + ' wpisów do pliku .md');
@@ -1205,6 +1382,7 @@
 
   // Udostępnianie: plik .md → sam tekst → schowek → pobranie. Przycisk działa na każdej przeglądarce.
   async function shareMd(nodes = state.roots, title = '') {
+    if (nodes === state.roots) bkMarkExternal();
     if (!nodes.length) { toast('Nie ma jeszcze czego udostępnić.'); return; }
     const md = toMarkdown(nodes), name = fileName(title);
     const shareTitle = title ? plain(title) : 'Notatki z MindNotes';
@@ -1251,7 +1429,7 @@
     destructive(`Zaimportowano ${n} notatek`, () => {
       state.roots = mode === 'append' ? [...state.roots, ...imported] : imported;
       state.targetId = null;
-    });
+    }, { backup: true });
   }
 
   /* ================= Ustawienia ================= */
@@ -1328,7 +1506,9 @@
         h('div', { class: 'stack', style: 'margin-top:.5rem' },
           h('button', { class: 'btn', type: 'button', onclick: () => shareMd() }, icon('share'), 'Udostępnij…')),
         h('p', { class: 'hint' }, 'Format .md jest zgodny z markmap.js.org (# notatka, ## podwęzeł, niżej lista; **pogrubienie**, *kursywa*, ~~przekreślenie~~). Pojedynczą notatkę z gałęziami wyeksportujesz w jej oknie. Import rozpoznaje też starszy format z myślnikami.'),
-        h('p', { class: 'hint' }, 'Notatki są zapisane tylko w tej przeglądarce (na tym urządzeniu). Rób eksport od czasu do czasu — wyczyszczenie danych przeglądarki je usuwa.')),
+        h('p', { class: 'hint' }, 'Notatki są zapisane tylko w tej przeglądarce (na tym urządzeniu). Rób eksport od czasu do czasu — wyczyszczenie danych przeglądarki je usuwa (razem z automatycznymi kopiami).')),
+
+      bkSection(dlg),
 
       (deferredInstall || iosHint) ? h('div', { class: 'section' },
         h('h3', {}, 'Aplikacja'),
@@ -1342,7 +1522,7 @@
           onclick: async () => {
             const ans = await ask({ title: 'Usunąć wszystkie notatki?', message: `Zniknie ${countNodes(state.roots)} notatek. Tuż po usunięciu możesz to cofnąć.`,
               actions: [{ value: 'del', label: 'Usuń wszystko', kind: 'danger' }, { value: '', label: 'Anuluj' }] });
-            if (ans === 'del') { dlg.close(); destructive('Usunięto wszystkie notatki', () => { state.roots = []; state.targetId = null; }); }
+            if (ans === 'del') { dlg.close(); destructive('Usunięto wszystkie notatki', () => { state.roots = []; state.targetId = null; }, { backup: true }); }
           } }, icon('trash'), 'Usuń wszystkie notatki'),
         h('p', { class: 'hint' }, `Liczba notatek: ${countNodes(state.roots)}`))));
     dlg.showModal();
@@ -1411,6 +1591,7 @@
     try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch (e) { /* ignoruj */ }
 
     render();
+    bkInit();
     registerServiceWorker();
   }
 

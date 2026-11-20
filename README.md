@@ -78,4 +78,16 @@ Aplikacja działa offline dzięki service workerowi (`sw.js`). Po zmianie dowoln
 ## Dane
 
 Notatki są w `localStorage` przeglądarki, na danym urządzeniu i pod danym adresem. Nie synchronizują się między telefonami
-i znikają po wyczyszczeniu danych strony — dlatego warto robić eksport `.md` jako kopię zapasową.
+i znikają po wyczyszczeniu danych strony — dlatego aplikacja robi automatyczne kopie lokalne (Ustawienia → *Automatyczne kopie*):
+
+1. **Migawki w IndexedDB** — do 10 ostatnich kopii; powstają po zmianach (nie częściej niż co 3 godziny, tylko gdy dane się zmieniły),
+   przy starcie, przy zamknięciu karty oraz zawsze tuż przed importem, „Usuń wszystkie notatki” i przywróceniem kopii.
+   Listę (data, liczba notatek) i przycisk *Przywróć* znajdziesz w Ustawieniach. Kopie są w tej samej przeglądarce co notatki,
+   więc czyszczenie danych strony usuwa też je.
+2. **Automatyczny zapis pliku `.md` na dysku** — tylko Chrome/Edge na komputerze (File System Access API; na iOS i w Safari
+   opcja jest ukryta). Wybierasz plik (np. w folderze OneDrive/Dysku Google), a aplikacja aktualizuje go po zmianach.
+   Po ponownym uruchomieniu przeglądarka może poprosić o ponowne zezwolenie — przycisk pojawi się w Ustawieniach.
+3. **Przypomnienie** — jeśli od 7 dni nie zrobiono eksportu, udostępnienia ani zapisu pliku, po starcie pojawia się komunikat
+   z przyciskiem *Zrób kopię* (na telefonach otwiera menu udostępniania). Najpewniejsza kopia na iOS/Androidzie to `.md` zapisany w chmurze lub wysłany sobie.
+
+Eksport `.md` nadal warto robić ręcznie od czasu do czasu.
