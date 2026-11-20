@@ -4,7 +4,7 @@
   /* ================= Stałe i stan ================= */
   const KEY_NOTES = 'drzewko.notes.v1';
   const KEY_SETTINGS = 'drzewko.settings.v1';
-  const DEFAULT_SETTINGS = { theme: 'system', fontSize: 17, exportStyle: 'dashes', bkSince: 0, lastExternalBackup: 0, lastFileBackup: 0, bkRemindedAt: 0 };
+  const DEFAULT_SETTINGS = { theme: 'system', fontSize: 17, exportStyle: 'dashes', bkSince: 0, lastExternalBackup: 0, lastFileBackup: 0, bkRemindedAt: 0, bkRemindDays: 0 };
   const FS_MIN = 13;
   const FS_MAX = 26;
 
@@ -181,7 +181,7 @@
      Warstwa 1: migawki w IndexedDB (ostatnie 10), przywracanie w Ustawieniach.
      Warstwa 2: automatyczny zapis pliku .md na dysku (File System Access API — Chrome/Edge na komputerze).
      Warstwa 3: przypomnienie o kopii zewnętrznej (eksport / udostępnij), gdy minął tydzień. */
-  const BK = { DB: 'drzewko.backup', MAX: 10, GAP: 3 * 3600e3, REMIND: 7 * 864e5, FILE_DELAY: 20000, SNAP_DELAY: 5000 };
+  const BK = { DB: 'drzewko.backup', MAX: 10, GAP: 3 * 3600e3, FILE_DELAY: 20000, SNAP_DELAY: 5000 };
   const bkFileSupported = typeof window.showSaveFilePicker === 'function';
   let bkDbP = null, bkSnapTimer = 0, bkFileTimer = 0, bkHandle = null, bkFileStatus = '';   // '', 'ok', 'perm', 'err'
 
@@ -227,6 +227,9 @@
     } catch (e) { console.warn('Migawka nie powiodła się', e); return false; }
   }
 
+  // Co ile dni przypominać o kopii zewnętrznej: 0 = domyślnie (telefon 3 dni, komputer 7), -1 = wyłączone
+  const bkTouch = () => matchMedia('(hover: none) and (pointer: coarse)').matches;
+  function bkRemindDays() { const d = Number(state.settings.bkRemindDays) || 0; return d < 0 ? -1 : (d || (bkTouch() ? 3 : 7)); }
   function bkMarkExternal() { state.settings.lastExternalBackup = Date.now(); saveSettings(); }
 
   // Warstwa 2: zapis pliku
@@ -294,7 +297,7 @@
     bkLoadHandle().then(() => {
       if (!bkHandle) return;
       if (bkFileStatus === 'ok') bkWriteFile();
-      else if (bkFileStatus === 'perm') setTimeout(() => toast('Kopia do pliku wstrzymana — przeglądarka wymaga ponownej zgody.',
+      else if (bkFileStatus === 'perm' && !bkTouch()) setTimeout(() => toast('Kopia do pliku wstrzymana — przeglądarka wymaga ponownej zgody.',
         { action: 'Zezwól', duration: 15000, onAction: async () => { if (await bkGrantFile()) toast('Zapisano kopię do pliku'); } }), 1500);
     });
     setTimeout(() => bkSnapshot('start'), 3000);
@@ -304,8 +307,9 @@
     // Warstwa 3: przypomnienie
     setTimeout(() => {
       if (!state.roots.length) return;
+      const days0 = bkRemindDays(); if (days0 < 0) return;
       const last = s.lastExternalBackup || s.bkSince;
-      if (Date.now() - last < BK.REMIND || Date.now() - (s.bkRemindedAt || 0) < 864e5) return;
+      if (Date.now() - last < days0 * 864e5 || Date.now() - (s.bkRemindedAt || 0) < 864e5) return;
       s.bkRemindedAt = Date.now(); saveSettings();
       const days = Math.floor((Date.now() - last) / 864e5);
       toast(`Ostatnia kopia poza aplikacją: ${s.lastExternalBackup ? days + ' dni temu' : 'brak'}. Zapisz ją w chmurze lub wyślij sobie.`,
@@ -354,6 +358,10 @@
       h('p', { class: 'hint' }, `Aplikacja sama zapisuje w tej przeglądarce do ${BK.MAX} ostatnich kopii (po zmianach, nie częściej niż co kilka godzin; zawsze przed importem i usunięciem wszystkiego).`),
       list,
       bkFileSupported ? status : null, fileBox,
+      h('label', { class: 'hint', style: 'display:flex;align-items:center;gap:.5rem;margin-top:.6rem' }, 'Przypominaj o kopii (eksport / „Udostępnij”) co:',
+        h('select', { 'aria-label': 'Przypomnienie o kopii', onchange: (e) => { state.settings.bkRemindDays = Number(e.target.value); saveSettings(); } },
+          [[0, 'domyślnie (' + (bkTouch() ? 3 : 7) + ' dni)'], [2, '2 dni'], [3, '3 dni'], [5, '5 dni'], [7, '7 dni'], [14, '14 dni'], [-1, 'nigdy']]
+            .map(([v, t]) => h('option', { value: String(v), selected: (Number(state.settings.bkRemindDays) || 0) === v }, t)))),
       h('p', { class: 'hint' }, 'Kopie w przeglądarce znikną razem z jej danymi — dlatego od czasu do czasu zrób też eksport .md lub „Udostępnij…”.'));
   }
 

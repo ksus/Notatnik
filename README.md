@@ -101,7 +101,7 @@ i znikają po wyczyszczeniu danych strony — dlatego aplikacja robi automatyczn
 2. **Automatyczny zapis pliku `.md` na dysku** — tylko Chrome/Edge na komputerze (File System Access API; na iOS i w Safari
    opcja jest ukryta). Wybierasz plik (np. w folderze OneDrive/Dysku Google), a aplikacja aktualizuje go po zmianach.
    Po ponownym uruchomieniu przeglądarka może poprosić o ponowne zezwolenie — przycisk pojawi się w Ustawieniach.
-3. **Przypomnienie** — jeśli od 7 dni nie zrobiono eksportu, udostępnienia ani zapisu pliku, po starcie pojawia się komunikat
+3. **Przypomnienie** — jeśli od kilku dni (domyślnie 3 na telefonie, 7 na komputerze; do zmiany w Ustawieniach) nie zrobiono eksportu, udostępnienia ani zapisu pliku, po starcie pojawia się komunikat
    z przyciskiem *Zrób kopię* (na telefonach otwiera menu udostępniania). Najpewniejsza kopia na iOS/Androidzie to `.md` zapisany w chmurze lub wysłany sobie.
 
 Eksport `.md` nadal warto robić ręcznie od czasu do czasu.
