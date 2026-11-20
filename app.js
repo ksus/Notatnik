@@ -616,7 +616,7 @@
         onclick: () => setTarget(n.id) }, icon('plus')));
   }
 
-  /* ================= Przeciąganie notatek głównych (zmiana kolejności) ================= */
+  /* ================= Przeciąganie notatek (zmiana kolejności; główne i podwęzły w obrębie rodzica) ================= */
   // Zmiana kolejności — dotyk / rysik: przytrzymaj tytuł notatki ~0,4 s bez ruchu, potem przeciągnij.
   // Mysz (komputer): złap tytuł i przesuń o kilka pikseli. Krótkie dotknięcie nadal otwiera okno notatki.
   const HOLD_MS = 380, MOVE_SLOP = 8, SWIPE_SWITCH = 24;   // SWIPE_SWITCH: ruch w bok po przytrzymaniu zamienia „podniesienie” w przesunięcie
@@ -632,8 +632,9 @@
     if (!e.isPrimary || (e.pointerType === 'mouse' && e.button !== 0) || dragging) return;
     const el = e.currentTarget, li = el.closest('li.node'), ul = li && li.parentElement;
     if (!ul) return;
-    const isRoot = ul.classList.contains('root');   // podwęzły: tylko przesunięcie w lewo (usuń), bez zmiany kolejności i archiwizacji
-    const reorder = isRoot && allowReorder && ul.children.length === viewRoots().length;   // lista pełna (bez filtra)
+    const isRoot = ul.classList.contains('root');   // podwęzły: kolejność tylko w obrębie rodzica, w lewo = usuń, bez archiwizacji
+    const reorder = isRoot ? allowReorder && ul.children.length === viewRoots().length      // główne: lista pełna (bez filtra)
+      : !isArch() && !isFiltering() && ul.children.length > 1;                               // podwęzły: kolejność w obrębie jednego rodzica
     const pid = e.pointerId, x0 = e.clientX, y0 = e.clientY, mouse = e.pointerType === 'mouse';
     let x = x0, y = y0, timer = 0;
     const disarm = () => {
@@ -718,7 +719,7 @@
 
   // Podczas przeciągania gałąź jest chowana, żeby dało się ją łatwo przenieść.
   function beginDrag(el, li, ul, pid, startX, startY, id) {
-    const lis = [...ul.children], from = lis.indexOf(li), main = $('#main');
+    const lis = [...ul.children], from = lis.indexOf(li), main = $('#main'), isRoot = ul.classList.contains('root');
     if (from < 0) return;
     dragging = true;
     try { el.setPointerCapture(pid); } catch (err) { /* ignoruj */ }
@@ -759,7 +760,7 @@
       done = true; gestureEnd = null; dragging = false;
       ul.classList.remove('sorting'); li.classList.remove('dragging');
       li.style.transform = ''; lis.forEach((x) => { x.style.transform = ''; });
-      beginSwipe(el, li, pid, startX, id);
+      beginSwipe(el, li, pid, startX, id, !isRoot);
     };
     const onMove = (ev) => {
       if (ev.pointerId !== pid) return;
@@ -775,7 +776,11 @@
       el.removeEventListener('pointercancel', onCancel);
       if (raf) cancelAnimationFrame(raf);
       dragging = false; noClickUntil = Date.now() + 400;
-      if (commit && to !== from) {
+      if (commit && to !== from && !isRoot) {
+        const l = locate(id);                      // podwęzeł: przestaw w tablicy rodzica
+        if (l) { const [moved] = l.list.splice(l.index, 1); l.list.splice(to, 0, moved); }
+        saveNotes(); render(); flash(id);
+      } else if (commit && to !== from) {
         // indeksy dotyczą widocznej listy; notatki z archiwum zostają na swoich miejscach w tablicy
         const vis = activeRoots(), moved = vis[from], rest = vis.filter((x) => x !== moved);
         state.roots.splice(state.roots.indexOf(moved), 1);
