@@ -75,6 +75,7 @@ Mapa jest rysowana w aplikacji biblioteką [markmap](https://github.com/markmap/
 W notatce wpisz `@` i namiar, np. `@J 3,16`, `@Ps 23,1-3`, `@1 Kor 13,4-7`, `@Rz 8,28.30` albo `@Ps 23` (cały rozdział).
 Po zatwierdzeniu (Enter w polu nowej notatki albo zamknięcie okna notatki) namiar zamienia się w tekst:
 `„…” (J 3,16 UBG)`; przy kilku wersetach każdy ma numer w nawiasie `[16]`. Rozpoznawane są polskie skróty (Rdz, Ps, Mt, Łk, J, Rz, 1Kor, Hbr, Obj…) i pełne nazwy (Jan, Jana, Psalm, Rzymian…).
+Podczas pisania nad polem pojawiają się **podpowiedzi** (księga → rozdział → werset); na komputerze `Tab` przyjmuje pierwszą, a podgląd tekstu wersetu widać tylko na szerokim ekranie.
 Nierozpoznany namiar zostaje bez zmian, a aplikacja pokaże komunikat.
 
 - Tekst: **Uwspółcześniona Biblia Gdańska (UBG)**, © 2018 Fundacja Wrota Nadziei, licencja **CC BY-ND 4.0** — tekst wolno rozpowszechniać

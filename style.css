@@ -314,3 +314,11 @@ dialog.sheet::backdrop { background: rgba(10, 12, 16, .5); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
 }
+
+/* ===== Podpowiedzi wersetów (nad polem pisania) ===== */
+.vsug { padding: 0 .1rem .45rem; min-width: 0; }
+.vsug[hidden] { display: none; }
+.vrow { display: flex; flex-wrap: nowrap; gap: .35rem; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.vrow::-webkit-scrollbar { display: none; }
+.vrow .chip { flex: none; padding: .3rem .75rem; font-size: .9rem; }
+.vpreview { font-size: .8rem; color: var(--muted); padding: 0 .2rem .35rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

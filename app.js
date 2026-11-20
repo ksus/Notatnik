@@ -291,7 +291,12 @@
   function bkInit() {
     const s = state.settings;
     if (!s.bkSince) { s.bkSince = Date.now(); saveSettings(); }
-    bkLoadHandle().then(() => { if (bkHandle && bkFileStatus === 'ok') bkWriteFile(); });
+    bkLoadHandle().then(() => {
+      if (!bkHandle) return;
+      if (bkFileStatus === 'ok') bkWriteFile();
+      else if (bkFileStatus === 'perm') setTimeout(() => toast('Kopia do pliku wstrzymana — przeglądarka wymaga ponownej zgody.',
+        { action: 'Zezwól', duration: 15000, onAction: async () => { if (await bkGrantFile()) toast('Zapisano kopię do pliku'); } }), 1500);
+    });
     setTimeout(() => bkSnapshot('start'), 3000);
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'hidden') { bkSnapshot('auto'); if (bkHandle) bkWriteFile(); }
@@ -868,10 +873,12 @@
     $('#cInput').addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); submitComposer(); }
       else if (e.key === 'Tab') {
+        if (!e.shiftKey && vSugTab()) { e.preventDefault(); return; }
         if (e.shiftKey && !$('#cOut').disabled) { e.preventDefault(); goOut(); }
         else if (!e.shiftKey && !$('#cIn').disabled) { e.preventDefault(); goDeeper(); }
       }
     });
+    initVerseSuggest();
     // wysokość paska → położenie toasta
     if ('ResizeObserver' in window) {
       new ResizeObserver(() => document.documentElement.style.setProperty('--composer-h', $('#composer').offsetHeight + 'px'))
@@ -967,6 +974,94 @@
     const { text: out, missing } = expandVersesSync(text);
     if (missing.length) toast(`Nie znaleziono wersetu: ${missing.join(', ')}`, { duration: 6000 });
     return out;
+  }
+
+  /* ----- podpowiedzi namiarów (pasek nad polem pisania): @R… → księga → rozdział → werset ----- */
+  const BOOK_RE = '((?:[1-3]\\s?)?[\\p{L}]+\\.?)';
+  let vSugEl = null, vSugItems = [];
+  const vWide = () => matchMedia('(min-width: 700px) and (hover: hover)').matches;
+
+  function vSugContext(input) {
+    const before = input.value.slice(0, input.selectionStart);
+    const at = before.lastIndexOf('@');
+    if (at < 0 || (at > 0 && !/[\s(„"]/.test(before[at - 1]))) return null;
+    return { at, tail: before.slice(at + 1) };
+  }
+
+  // zwraca { items: [{ label, small, insert }], preview } albo null
+  function vSugCompute(tail) {
+    const D = bibleData; if (!D) return null;
+    const closeBook = (id) => D.books[id].a + ' ';
+    let m = new RegExp('^((?:[1-3]\\s?)?[\\p{L}]*)\\.?$', 'u').exec(tail);
+    if (m && m[1]) {                                                      // etap 1: księga
+      const key = bkNorm(m[1]); const ids = new Set(); const exact = [];
+      for (const [a, id] of bibleAliases) if (a.startsWith(key)) { ids.add(id); if (a === key) exact.push(id); }
+      if (!ids.size) return null;
+      const list = [...new Set([...exact, ...D.order.filter((id) => ids.has(id))])].slice(0, 12);
+      if (list.length === 1 && bkNorm(D.books[list[0]].a) === key) { /* księga już wpisana — przejdź do rozdziałów */ }
+      else return { items: list.map((id) => ({ label: D.books[id].a, small: D.books[id].n, insert: closeBook(id) })) };
+    }
+    m = new RegExp('^' + BOOK_RE + '\\s*(\\d*)$', 'u').exec(tail);
+    if (m) {                                                              // etap 2: rozdział
+      const id = bibleBookId(m[1]); if (!id) return null;
+      const book = D.books[id], typed = m[2], items = [];
+      for (let n = 1; n <= book.c.length; n++) if (String(n).startsWith(typed)) items.push({ label: String(n), insert: `${book.a} ${n},` });
+      return items.length ? { items: items.slice(0, 60) } : null;
+    }
+    m = new RegExp('^' + BOOK_RE + '\\s*(\\d+)\\s*[,:]\\s*([\\d\\-–.;\\s]*)$', 'u').exec(tail);
+    if (m) {                                                              // etap 3: werset
+      const id = bibleBookId(m[1]); if (!id) return null;
+      const book = D.books[id], ch = book.c[+m[2] - 1]; if (!ch) return null;
+      const spec = m[3].replace(/\s+/g, ''), head = `${book.a} ${m[2]},`;
+      const lastNum = (spec.match(/(\d+)$/) || [])[1] || '', base = spec.slice(0, spec.length - lastNum.length);
+      const items = [];
+      if (lastNum && !spec.endsWith('-') && ch.length > 1) { items.push({ label: '–', small: 'zakres', insert: head + spec + '-' }); items.push({ label: '·', small: 'kolejny', insert: head + spec + '.' }); }
+      const from = +((base.match(/(\d+)-$/) || [])[1] || 0) + 1;     // po „28-” podpowiadaj od 29
+      for (let n = from; n <= ch.length && items.length < 60; n++) if (String(n).startsWith(lastNum)) items.push({ label: String(n), insert: head + base + n });
+      const pv = +(lastNum || (spec.match(/(\d+)/) || [])[1] || 0);
+      return { items, preview: pv && ch[pv - 1] ? `${book.a} ${m[2]},${pv} — ${ch[pv - 1]}` : (ch.length + ' wersetów — wybierz numer') };
+    }
+    return null;
+  }
+
+  function vSugUpdate() {
+    const input = $('#cInput'); if (!vSugEl) return;
+    const ctx = vSugContext(input);
+    if (!ctx) { vSugItems = []; vSugEl.hidden = true; return; }
+    if (!bibleData) { ensureBible().then(vSugUpdate).catch(() => {}); return; }
+    const r = vSugCompute(ctx.tail);
+    if (!r || !r.items.length) { vSugItems = []; vSugEl.hidden = true; return; }
+    vSugItems = r.items.map((it) => ({ ...it, at: ctx.at, end: input.selectionStart }));
+    const kids = [];
+    if (r.preview && vWide()) kids.push(h('div', { class: 'vpreview' }, r.preview));
+    kids.push(h('div', { class: 'vrow' }, vSugItems.map((it) => h('button', { class: 'chip suggest', type: 'button',
+      onmousedown: (e) => e.preventDefault(), onclick: () => vSugApply(it) }, it.label, it.small ? h('small', {}, ' ' + it.small) : null))));
+    vSugEl.replaceChildren(...kids);
+    vSugEl.hidden = false;
+  }
+
+  function vSugApply(it) {
+    const input = $('#cInput');
+    input.setRangeText('@' + it.insert, it.at, it.end, 'end');
+    input.focus();
+    vSugUpdate();
+  }
+
+  // Tab na komputerze przyjmuje pierwszą podpowiedź; zwraca true, gdy obsłużył
+  function vSugTab() {
+    if (!vSugItems.length || vSugEl.hidden) return false;
+    vSugApply(vSugItems[0]); return true;
+  }
+
+  function initVerseSuggest() {
+    vSugEl = h('div', { id: 'vSug', class: 'vsug', hidden: true });
+    $('#composer').insertBefore(vSugEl, $('#composer .inputrow'));
+    const input = $('#cInput');
+    input.addEventListener('input', vSugUpdate);
+    input.addEventListener('click', vSugUpdate);
+    input.addEventListener('keyup', (e) => { if (e.key.startsWith('Arrow') || e.key === 'Home' || e.key === 'End') vSugUpdate(); });
+    input.addEventListener('blur', () => setTimeout(() => { if (document.activeElement !== input && vSugEl) vSugEl.hidden = true; }, 150));
+    input.addEventListener('focus', vSugUpdate);
   }
 
   /* ================= Arkusz notatki ================= */
@@ -1611,7 +1706,7 @@
 
       h('div', { class: 'section' },
         h('h3', {}, 'Wersety biblijne'),
-        h('p', { class: 'hint' }, 'Wpisz w notatce @ i namiar, np. @J 3,16 · @Ps 23,1-3 · @1 Kor 13,4-7 · @Rz 8,28.30 · @Ps 23 (cały rozdział) — po zatwierdzeniu zamieni się w tekst wersetu. Działa offline.'),
+        h('p', { class: 'hint' }, 'Wpisz w notatce @ i kilka liter księgi — nad polem pojawią się podpowiedzi (księga → rozdział → werset; na komputerze Tab przyjmuje pierwszą). Namiar możesz też wpisać w całości, np. @J 3,16 · @Ps 23,1-3 · @1 Kor 13,4-7 · @Rz 8,28.30 · @Ps 23 (cały rozdział) — po zatwierdzeniu zamieni się w tekst wersetu. Działa offline.'),
         h('p', { class: 'hint' }, 'Tekst: Uwspółcześniona Biblia Gdańska (UBG), © 2018 Fundacja Wrota Nadziei, licencja CC BY-ND 4.0 (tekst bez zmian). Źródło: ebible.org/details.php?id=polubg')),
 
       (deferredInstall || iosHint) ? h('div', { class: 'section' },
