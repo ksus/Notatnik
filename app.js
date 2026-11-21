@@ -54,6 +54,7 @@
     up: '<path d="M12 19V5M6 11l6-6 6 6"/>',
     down: '<path d="M12 5v14M6 13l6 6 6-6"/>',
     indent: '<path d="M4 4v16M9 12h11M15 7l5 5-5 5"/>',
+    subnode: '<path d="M5 4v8a3 3 0 0 0 3 3h11M15 10l5 5-5 5"/>',
     outdent: '<path d="M20 4v16M15 12H4M9 7l-5 5 5 5"/>',
     download: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
     upload: '<path d="M12 16V5M7 10l5-5 5 5M5 20h14"/>',
@@ -833,7 +834,9 @@
     if (state.targetId && !t) state.targetId = null;
     const depth = t ? t.depth + 1 : 0;
     $('#cPrefix').textContent = '-'.repeat(depth + 1);
-    $('#cCtxLabel').textContent = t ? 'Dodajesz pod:' : 'Nowa notatka główna';
+    const lbl = $('#cCtxLabel');
+    if (t) { lbl.replaceChildren(icon('subnode', '1.1em')); lbl.title = 'Dodajesz pod:'; lbl.setAttribute('aria-label', 'Dodajesz pod:'); }
+    else { lbl.textContent = 'Nowa notatka główna'; lbl.removeAttribute('title'); lbl.removeAttribute('aria-label'); }
     $('#cCtxText').textContent = t ? plain(t.node.text) : '';
     $('#cReset').hidden = !t;
     $('#cOut').disabled = !t;
