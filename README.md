@@ -2,7 +2,7 @@
 
 Notatnik w formie drzewa / mapy myśli. Czysty HTML + CSS + JavaScript, bez budowania (dołączone biblioteki mapy myśli leżą w `lib/`).
 Działa offline, zapisuje dane lokalnie na urządzeniu, eksportuje i importuje pliki `.md`
-oraz eksportuje mapę myśli do SVG, PNG i HTML.
+eksportuje mapę myśli do SVG, PNG i HTML oraz sformatowany widok notatek do HTML.
 
 ## Instalacja na telefonie
 
@@ -54,6 +54,16 @@ więc mapa ich nie wyświetla:
 - Import rozpoznaje format markmap, zwykłe listy markdown z wcięciami (`-`, `*`, `+`, `1.`) oraz starszy format
   z myślnikami (`-`, `--`, `---`). Brakująca data oznacza „teraz”. Eksport `.md` zawiera także archiwum: notatka zarchiwizowana ma w komentarzu pod nagłówkiem znacznik 📦, więc import ją odtwarza.
   Przy imporcie możesz dołączyć notatki do istniejących albo je zastąpić.
+
+## Eksport sformatowanego widoku (.html)
+
+Ta sama treść co w pliku `.md`, ale jako gotowa, sformatowana strona: notatka to nagłówek `<h1>` (z datą, ★ / 📦 i tagami),
+podwęzły to `<h2>`, głębsze poziomy to zagnieżdżone listy. Działają **pogrubienie**, *kursywa*, ~~przekreślenie~~, ==zakreślenie== i zadania `[ ]` / `[x]` (rysowane jako pola wyboru).
+
+- Całość: Ustawienia → Kopia zapasowa → **Widok .html** (jak w `.md` — razem z notatkami z archiwum, oznaczonymi 📦).
+- Jedna notatka lub gałąź: dotknij notatki → **Sformatowany widok .html**.
+- Samodzielny plik bez skryptów i bibliotek, działa bez internetu; jasny/ciemny motyw według ustawień systemu, ładnie się drukuje (Ctrl+P → PDF).
+- To nie jest kopia zapasowa — pliku `.html` nie da się zaimportować (do tego służy `.md`).
 
 ## Eksport mapy myśli (SVG / PNG / HTML)
 

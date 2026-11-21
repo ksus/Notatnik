@@ -1206,6 +1206,8 @@
       h('div', { class: 'two', style: 'margin-top:.5rem' },
         h('button', { class: 'btn', type: 'button', onclick: () => exportBranch(false) }, icon('download'), isRoot ? 'Eksport notatki .md' : 'Eksport gałęzi .md'),
         h('button', { class: 'btn', type: 'button', onclick: () => exportBranch(true) }, icon('share'), 'Udostępnij…')),
+      h('div', { class: 'stack', style: 'margin-top:.5rem' },
+        h('button', { class: 'btn', type: 'button', onclick: () => exportBranchDoc() }, icon('download'), 'Sformatowany widok .html')),
 
       h('div', { class: 'field' },
         h('span', { class: 'lbl' }, 'Mapa myśli (markmap)'),
@@ -1222,6 +1224,11 @@
     commitSheet();
     const l = locate(sheetCtx.id); if (!l) return;
     (share ? shareMd : exportMd)([l.node], plain(l.node.text));
+  }
+  function exportBranchDoc() {
+    commitSheet();
+    const l = locate(sheetCtx.id); if (!l) return;
+    exportDoc([l.node], plain(l.node.text));
   }
   function exportBranchMap(format) {
     commitSheet();
@@ -1407,6 +1414,84 @@
     if (!nodes.length) { toast('Nie ma jeszcze czego eksportować.'); return; }
     downloadBlob(new Blob([toMarkdown(nodes)], { type: 'text/markdown;charset=utf-8' }), fileName(title));
     toast('Wyeksportowano ' + countNodes(nodes) + ' wpisów do pliku .md');
+  }
+
+  /* ================= Eksport sformatowanego widoku markdown (.html) ================= */
+  // Ta sama struktura co w pliku .md (# notatka, ## podwęzeł, głębiej listy), ale jako gotowa, ładnie
+  // sformatowana strona: samodzielny plik bez skryptów i bibliotek, jasny/ciemny motyw, przyjazny drukowi.
+  const DOC_CSS = `
+:root{--bg:#fff;--fg:#1f2430;--muted:#6b7280;--line:#e5e7eb;--accent:#2c6b5a;--chip:#eef4f2;--mark:#fff0a0}
+@media (prefers-color-scheme:dark){:root{--bg:#14161a;--fg:#e6e8ec;--muted:#9aa1ad;--line:#2a2e36;--accent:#6fc2aa;--chip:#1e2a27;--mark:#5c5010}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif}
+main{max-width:46rem;margin:0 auto;padding:2rem 1.25rem 3rem}
+section.note{margin:0 0 2.5rem}
+section.note+section.note{padding-top:2rem;border-top:1px solid var(--line)}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .35rem;letter-spacing:-.01em}
+h2{font-size:1.3rem;line-height:1.3;margin:1.8rem 0 .5rem;padding-bottom:.25rem;border-bottom:1px solid var(--line)}
+.meta{display:flex;flex-wrap:wrap;gap:.4rem .6rem;align-items:center;margin:0 0 1rem;color:var(--muted);font-size:.85rem}
+.tag{background:var(--chip);color:var(--accent);padding:.05rem .55rem;border-radius:999px;font-weight:600}
+ul{margin:.3rem 0;padding-left:1.4rem}
+ul ul{margin:.15rem 0}
+li{margin:.2rem 0}
+li.task{list-style:none;margin-left:-1.4rem;padding-left:0}
+mark{background:var(--mark);color:inherit;padding:0 .15em;border-radius:3px}
+del{opacity:.7}
+.cb{display:inline-block;position:relative;box-sizing:border-box;width:.95em;height:.95em;margin-right:.45em;vertical-align:-.12em;border:1.6px solid currentColor;border-radius:.2em;opacity:.8}
+.cb.on{background:var(--accent);border-color:var(--accent);opacity:1}
+.cb.on::after{content:"";position:absolute;left:.27em;top:.03em;width:.26em;height:.52em;border:solid #fff;border-width:0 .15em .15em 0;transform:rotate(45deg)}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--line);color:var(--muted);font-size:.8rem}
+@media print{:root{--bg:#fff;--fg:#000;--muted:#555;--line:#ccc;--accent:#1d5a48;--chip:#eee;--mark:#fff0a0}body{font-size:12pt}main{max-width:none;padding:0}section.note{break-inside:auto}h1,h2{break-after:avoid}li{break-inside:avoid}}
+`;
+
+  function buildDocHtml(nodes, title) {
+    const label = (text) => {
+      const t = taskOf(text);
+      return t
+        ? `<span class="cb${t.done ? ' on' : ''}" role="img" aria-label="${t.done ? 'zrobione' : 'do zrobienia'}"></span>${inlineHtml(t.rest)}`
+        : inlineHtml(text);
+    };
+    const list = (kids) => {
+      if (!kids.length) return '';
+      return '<ul>' + kids.map((n) => `<li${taskOf(n.text) ? ' class="task"' : ''}>${label(n.text)}${list(n.children)}</li>`).join('') + '</ul>';
+    };
+    const section = (n) => { // poziom 2 (##) + jego lista
+      return `<h2>${label(n.text)}</h2>\n${list(n.children)}`;
+    };
+    const note = (n) => {
+      const meta = [exportDate(n.created), ...(n.fav ? ['★'] : []), ...(n.archived ? ['📦 archiwum'] : [])]
+        .map((s) => `<span>${escHtml(s)}</span>`)
+        .concat(n.tags.map((t) => `<span class="tag">#${escHtml(t)}</span>`)).join('');
+      return `<section class="note">\n<h1>${label(n.text)}</h1>\n<div class="meta">${meta}</div>\n${n.children.map(section).join('\n')}\n</section>`;
+    };
+    const docTitle = title ? plain(title) : 'MindNotes';
+    const d = new Date();
+    const stamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    return `<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>${escHtml(docTitle)}</title>
+<style>${DOC_CSS}</style>
+</head>
+<body>
+<main>
+${nodes.map(note).join('\n')}
+<footer>Wyeksportowano z MindNotes · ${stamp}</footer>
+</main>
+</body>
+</html>
+`;
+  }
+
+  function exportDoc(nodes = state.roots, title = '') {
+    if (!nodes.length) { toast('Nie ma jeszcze czego eksportować.'); return; }
+    downloadBlob(new Blob([buildDocHtml(nodes, title)], { type: 'text/html;charset=utf-8' }),
+      fileName(title, 'html').replace(/\.html$/, '-widok.html'));
+    toast('Wyeksportowano ' + countNodes(nodes) + ' wpisów do sformatowanego pliku .html');
   }
 
   /* ================= Eksport mapy myśli: SVG / PNG / HTML (markmap) ================= */
@@ -1711,9 +1796,11 @@
         h('div', { class: 'two' },
           h('button', { class: 'btn', type: 'button', onclick: () => exportMd() }, icon('download'), 'Eksport .md'),
           h('button', { class: 'btn', type: 'button', onclick: () => $('#fileIn').click() }, icon('upload'), 'Import .md')),
-        h('div', { class: 'stack', style: 'margin-top:.5rem' },
-          h('button', { class: 'btn', type: 'button', onclick: () => shareMd() }, icon('share'), 'Udostępnij…')),
+        h('div', { class: 'two', style: 'margin-top:.5rem' },
+          h('button', { class: 'btn', type: 'button', onclick: () => shareMd() }, icon('share'), 'Udostępnij…'),
+          h('button', { class: 'btn', type: 'button', onclick: () => exportDoc() }, icon('download'), 'Widok .html')),
         h('p', { class: 'hint' }, 'Format .md jest zgodny z markmap.js.org (# notatka, ## podwęzeł, niżej lista; **pogrubienie**, *kursywa*, ~~przekreślenie~~). Pojedynczą notatkę z gałęziami wyeksportujesz w jej oknie. Import rozpoznaje też starszy format z myślnikami.'),
+        h('p', { class: 'hint' }, '„Widok .html” to ta sama treść co w .md, ale jako sformatowana strona (nagłówki, listy, pogrubienia, zadania, tagi) — samodzielny plik, który otworzysz w przeglądarce lub wydrukujesz. To nie jest kopia zapasowa (nie da się go zaimportować).'),
         h('p', { class: 'hint' }, 'Notatki są zapisane tylko w tej przeglądarce (na tym urządzeniu). Rób eksport od czasu do czasu — wyczyszczenie danych przeglądarki je usuwa (razem z automatycznymi kopiami).')),
 
       bkSection(dlg),
