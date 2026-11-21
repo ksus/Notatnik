@@ -1086,6 +1086,14 @@
     sheetCtx = { id, tags: [...loc.node.tags] };
     renderNodeSheet();
     $('#sheet').showModal();
+    fitSheetText();
+  }
+
+  // pole treści rośnie razem z tekstem (zawija wiersze, min. 3 wiersze, potem przewija się)
+  function fitSheetText() {
+    const el = $('#sText'); if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = el.scrollHeight + 'px';
   }
 
   function commitSheet() {
@@ -1155,8 +1163,9 @@
 
       h('div', { class: 'field' },
         h('label', { class: 'lbl', for: 'sText' }, 'Treść'),
-        h('input', { id: 'sText', type: 'text', value: node.text, maxlength: '500', autocomplete: 'off', enterkeyhint: 'done',
-          onkeydown: (e) => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); dlg.close(); } } }),
+        h('textarea', { id: 'sText', rows: '3', maxlength: '500', autocomplete: 'off', enterkeyhint: 'done', spellcheck: 'true',
+          oninput: fitSheetText,
+          onkeydown: (e) => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); dlg.close(); } } }, node.text),
         h('div', { class: 'fmtbar', role: 'group', 'aria-label': 'Formatowanie' },
           fmtBtn('B', 'Pogrubienie **tekst**', '**', 'fmt-b'),
           fmtBtn('I', 'Kursywa *tekst*', '*', 'fmt-i'),
@@ -1217,6 +1226,7 @@
         h('button', { class: 'btn danger', type: 'button', onclick: () => deleteFromSheet() }, icon('trash'), 'Usuń'),
         h('button', { class: 'btn primary', type: 'button', onclick: () => dlg.close() }, 'Gotowe'))));
     renderSheetTags();
+    if (dlg.open) fitSheetText();
   }
 
   // eksport jednej notatki razem z jej podwęzłami (z arkusza notatki)
