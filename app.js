@@ -4,7 +4,7 @@
   /* ================= Stałe i stan ================= */
   const KEY_NOTES = 'drzewko.notes.v1';
   const KEY_SETTINGS = 'drzewko.settings.v1';
-  const DEFAULT_SETTINGS = { theme: 'system', fontSize: 17, exportStyle: 'dashes', bkSince: 0, lastExternalBackup: 0, lastFileBackup: 0, bkRemindedAt: 0, bkRemindDays: 0 };
+  const DEFAULT_SETTINGS = { theme: 'system', fontSize: 17, exportStyle: 'dashes', autoNest: true, bkSince: 0, lastExternalBackup: 0, lastFileBackup: 0, bkRemindedAt: 0, bkRemindDays: 0 };
   const FS_MIN = 13;
   const FS_MAX = 26;
 
@@ -168,6 +168,7 @@
     state.settings.fontSize = Math.min(FS_MAX, Math.max(FS_MIN, isNaN(fs) ? 17 : fs));
     if (!['light', 'dark', 'system'].includes(state.settings.theme)) state.settings.theme = 'system';
     if (!['dashes', 'indent'].includes(state.settings.exportStyle)) state.settings.exportStyle = 'dashes';
+    state.settings.autoNest = state.settings.autoNest !== false;
   }
 
   function saveNotes() {
@@ -835,8 +836,8 @@
     const depth = t ? t.depth + 1 : 0;
     $('#cPrefix').textContent = '-'.repeat(depth + 1);
     const lbl = $('#cCtxLabel');
+    $('#cCtx').hidden = !t;   // bez wybranej notatki nie ma czego pokazywać (poziom to zawsze „główny”)
     if (t) { lbl.replaceChildren(icon('subnode', '1.1em')); lbl.title = 'Dodajesz pod:'; lbl.setAttribute('aria-label', 'Dodajesz pod:'); }
-    else { lbl.textContent = 'Nowa notatka główna'; lbl.removeAttribute('title'); lbl.removeAttribute('aria-label'); }
     $('#cCtxText').textContent = t ? plain(t.node.text) : '';
     $('#cReset').hidden = !t;
     $('#cOut').disabled = !t;
@@ -873,6 +874,8 @@
     const node = addNode(state.targetId, raw);
     if (!node) return;
     input.value = ''; fitComposer();
+    // po nowym temacie (notatka główna) kolejne wpisy domyślnie trafiają pod niego — jeśli włączone w Ustawieniach
+    if (!state.targetId && state.settings.autoNest) state.targetId = node.id;
     saveNotes(); render(); flash(node.id);
     input.focus();
   }
@@ -1802,6 +1805,13 @@ ${nodes.map(note).join('\n')}
           range,
           h('button', { class: 'btn small', type: 'button', 'aria-label': 'Większa czcionka', onclick: () => setFs(s.fontSize + 1) }, 'A+')),
         h('div', { class: 'preview' }, renderInline('Przykład: **pogrubienie**, *kursywa*, ~~przekreślenie~~, ==zakreślenie=='))),
+
+      h('div', { class: 'section' },
+        h('h3', {}, 'Dodawanie'),
+        h('label', { class: 'hint', style: 'display:flex;align-items:center;gap:.6rem;margin:0' },
+          h('input', { type: 'checkbox', checked: s.autoNest ? '' : null, style: 'width:1.3rem;height:1.3rem;accent-color:var(--accent);flex:none',
+            onchange: (e) => { s.autoNest = e.target.checked; saveSettings(); } }),
+          'Po dodaniu nowego tematu dodawaj kolejne wpisy pod nim (poziom wyżej: ⇤ / Shift+Tab / ✕)')),
 
       h('div', { class: 'section' },
         h('h3', {}, 'Drzewo'),
