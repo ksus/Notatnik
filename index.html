@@ -59,18 +59,18 @@
     <div id="toast" role="status" aria-live="polite" hidden></div>
 
     <footer id="composer">
-      <div id="cCtx" class="ctx" hidden>
-        <span class="ctx-label">Dodajesz pod:</span>
+      <div class="ctx">
+        <span id="cCtxLabel" class="ctx-label">Nowa notatka główna</span>
         <b id="cCtxText"></b>
-        <button id="cReset" class="mini" type="button" aria-label="Wróć do najwyższego poziomu"></button>
+        <span class="lvl">poziom <span id="cPrefix" class="lvl-n">-</span></span>
+        <button id="cOut" class="sq sm" type="button" title="Poziom wyżej (Shift+Tab)" aria-label="Poziom wyżej"></button>
+        <button id="cIn" class="sq sm" type="button" title="Poziom niżej (Tab)" aria-label="Poziom niżej"></button>
+        <button id="cReset" class="mini" type="button" aria-label="Wróć do najwyższego poziomu" hidden></button>
       </div>
       <div class="inputrow">
-        <span id="cPrefix" class="prefix" aria-hidden="true">-</span>
-        <input id="cInput" type="text" placeholder="Nowa notatka… (#tag)" autocomplete="off"
-               autocapitalize="sentences" enterkeyhint="send" maxlength="500">
-        <button id="cOut" class="sq" type="button" title="Poziom wyżej (Shift+Tab)" aria-label="Poziom wyżej"></button>
-        <button id="cIn" class="sq" type="button" title="Poziom niżej (Tab)" aria-label="Poziom niżej"></button>
-        <button id="cAdd" class="sq primary" type="button" title="Dodaj (Enter)" aria-label="Dodaj notatkę"></button>
+        <textarea id="cInput" rows="1" placeholder="Nowa notatka… (#tag)" autocomplete="off"
+               autocapitalize="sentences" enterkeyhint="send" maxlength="500"></textarea>
+        <button id="cAdd" class="sq primary round" type="button" title="Dodaj (Enter)" aria-label="Dodaj notatkę"></button>
       </div>
     </footer>
   </div>

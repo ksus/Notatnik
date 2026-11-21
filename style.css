@@ -169,23 +169,31 @@ button.chip.on { background: var(--accent); color: var(--accent-ink); }
   flex: none; background: var(--surface); border-top: 1px solid var(--line);
   padding: .45rem .6rem calc(.45rem + env(safe-area-inset-bottom));
 }
-.ctx { display: flex; align-items: center; gap: .4rem; font-size: .8rem; color: var(--muted); padding: 0 .2rem .4rem; min-width: 0; }
-.ctx b { color: var(--ink); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.ctx { display: flex; align-items: center; gap: .35rem; font-size: .8rem; color: var(--muted); padding: 0 .2rem .45rem; min-width: 0; }
+.ctx b { flex: 1; color: var(--ink); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .ctx-label { flex: none; }
-.mini { margin-left: auto; flex: none; width: 1.8rem; height: 1.8rem; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; }
+.lvl { flex: none; white-space: nowrap; }
+.lvl-n { font-family: var(--mono); font-weight: 700; color: var(--accent); }
+.mini { flex: none; width: 1.8rem; height: 1.8rem; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; }
+.mini[hidden] { display: none; }
 .mini:active { background: var(--surface-2); }
-.inputrow { display: flex; align-items: center; gap: .35rem; }
-.inputrow .prefix { min-width: 1.4rem; justify-content: flex-end; height: auto; }
+.inputrow { display: flex; align-items: flex-end; gap: .45rem; }
 #cInput {
-  flex: 1; min-width: 0; height: 2.7rem; padding: 0 .8rem;
-  border: 1px solid var(--line); border-radius: .85rem; background: var(--bg);
-  font-size: max(16px, 1rem);
+  flex: 1; min-width: 0; display: block; resize: none; overflow-y: auto;
+  height: 2.7rem; min-height: 2.7rem;
+  max-height: calc(4 * 1.35 * max(16px, 1rem) + 1.2rem + 2px); /* 4 wiersze */
+  padding: .6rem .8rem; line-height: 1.35;
+  border: 1px solid var(--line); border-radius: 1.35rem; background: var(--bg);
+  font: inherit; font-size: max(16px, 1rem); line-height: 1.35; color: inherit;
+  overflow-wrap: anywhere;
 }
 .sq {
   flex: none; width: max(42px, 2.5rem); height: max(42px, 2.5rem); border-radius: .85rem;
   display: inline-flex; align-items: center; justify-content: center;
   background: var(--surface-2);
 }
+.sq.sm { width: max(38px, 2.2rem); height: max(38px, 2.2rem); border-radius: 50%; }
+.sq.round { border-radius: 50%; width: max(44px, 2.7rem); height: max(44px, 2.7rem); }
 .sq.primary { background: var(--accent); color: var(--accent-ink); }
 
 /* ===== Toast ===== */

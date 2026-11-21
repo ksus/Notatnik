@@ -11,9 +11,9 @@ eksportuje mapę myśli do SVG, PNG i HTML oraz sformatowany widok notatek do HT
 
 ## Obsługa
 
-- Dolny pasek dodaje wpisy. Prefiks przy polu pokazuje poziom: `-`, `--`, `---`…
-- Przyciski `⇥` / `⇤` przy polu zmieniają poziom nowego wpisu (na komputerze: **Tab** / **Shift+Tab**),
-  dzięki czemu mapę myśli wpisuje się bez odrywania się od klawiatury.
+- Dolny pasek dodaje wpisy. Pole rośnie razem z tekstem (do 4 wierszy, potem się przewija); **Enter** dodaje wpis. Nad polem jest wiersz „Dodajesz pod: …” z poziomem (`-`, `--`, `---`…).
+- Przyciski `⇤` / `⇥` nad polem zmieniają poziom nowego wpisu (na komputerze: **Tab** / **Shift+Tab**),
+  dzięki czemu mapę myśli wpisuje się bez odrywania się od klawiatury. Okrągły przycisk **＋** przy polu dodaje wpis.
 - Przycisk **＋** przy notatce dodaje do niej podwęzeł.
 - Tagi: wpisz `#tag` w treści (np. `Kupić mleko #zakupy`) albo dodaj je w oknie notatki.
 - Dotknięcie notatki otwiera jej okno: edycja treści i tagów, data utworzenia, przesuwanie w górę/w dół,

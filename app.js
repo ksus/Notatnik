@@ -833,8 +833,9 @@
     if (state.targetId && !t) state.targetId = null;
     const depth = t ? t.depth + 1 : 0;
     $('#cPrefix').textContent = '-'.repeat(depth + 1);
-    $('#cCtx').hidden = !t;
-    if (t) $('#cCtxText').textContent = plain(t.node.text);
+    $('#cCtxLabel').textContent = t ? 'Dodajesz pod:' : 'Nowa notatka główna';
+    $('#cCtxText').textContent = t ? plain(t.node.text) : '';
+    $('#cReset').hidden = !t;
     $('#cOut').disabled = !t;
     $('#cIn').disabled = (t ? t.node.children : activeRoots()).length === 0;
     $('#cInput').placeholder = t ? 'Nowy podwęzeł…' : 'Nowa notatka…';
@@ -868,9 +869,16 @@
     if (hasVerseRef(raw)) { composerBusy = true; try { raw = await expandVerses(raw); } finally { composerBusy = false; } }
     const node = addNode(state.targetId, raw);
     if (!node) return;
-    input.value = '';
+    input.value = ''; fitComposer();
     saveNotes(); render(); flash(node.id);
     input.focus();
+  }
+
+  // pole wpisywania rośnie razem z tekstem (jak w komunikatorach): do 4 wierszy, potem się przewija
+  function fitComposer() {
+    const el = $('#cInput'); if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = el.scrollHeight + 'px'; // max-height z CSS ogranicza do 4 wierszy
   }
 
   function initComposer() {
@@ -884,6 +892,7 @@
     $('#cOut').addEventListener('click', () => { goOut(); });
     $('#cIn').addEventListener('click', () => { goDeeper(); });
     $('#cReset').addEventListener('click', () => setTarget(null));
+    $('#cInput').addEventListener('input', fitComposer);
     $('#cInput').addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); submitComposer(); }
       else if (e.key === 'Tab') {
@@ -1057,6 +1066,7 @@
   function vSugApply(it) {
     const input = $('#cInput');
     input.setRangeText('@' + it.insert, it.at, it.end, 'end');
+    fitComposer();
     input.focus();
     vSugUpdate();
   }
