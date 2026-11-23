@@ -726,7 +726,6 @@
         (() => {
           const task = taskOf(n.text);
           return h('span', { class: 'text' + (task && task.done ? ' done' : '') },
-            depth === 0 && n.fav ? h('span', { class: 'fav-mark', role: 'img', 'aria-label': 'Ulubione', title: 'Ulubione' }, icon('star', '.95em', true)) : null,
             task ? h('button', {
               class: 'cb' + (task.done ? ' on' : ''), type: 'button', role: 'checkbox', 'aria-checked': String(task.done),
               'aria-label': task.done ? 'Zadanie wykonane — odznacz' : 'Zadanie do zrobienia — zaznacz',
@@ -734,7 +733,8 @@
               onkeydown: (e) => e.stopPropagation(),
               onclick: (e) => { e.stopPropagation(); toggleTask(n.id); },
             }) : null,
-            renderInline(task ? task.rest : n.text));
+            renderInline(task ? task.rest : n.text),
+            depth === 0 && n.fav ? h('span', { class: 'fav-mark', role: 'img', 'aria-label': 'Ulubione', title: 'Ulubione' }, icon('star', '.95em', true)) : null);   // ★ na końcu tytułu
         })(),
         h('span', { class: 'meta' },
           depth === 0 ? n.tags.map((t) => h('span', { class: 'chip' }, '#' + t)) : null,
