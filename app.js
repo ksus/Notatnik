@@ -764,10 +764,8 @@
         h('span', { class: 'meta' },
           depth === 0 ? n.tags.map((t) => h('span', { class: 'chip' }, '#' + t)) : null,
           depth === 0 && n.fav ? h('span', { class: 'fav-mark', role: 'img', 'aria-label': 'Ulubione', title: 'Ulubione' }, icon('star', '1.1em', true)) : null,   // ★ w wierszu tagów, po tagach
-          !open && hasKids ? h('button', { class: 'count', type: 'button', title: 'Ukryte podwęzły — dotknij, aby rozwinąć',
-            'aria-label': 'Rozwiń: ' + countNodes(n.children) + ' ukrytych podwęzłów',
-            onpointerdown: (e) => e.stopPropagation(), onkeydown: (e) => e.stopPropagation(),   // nie uruchamiaj przeciągania ani edycji
-            onclick: (e) => { e.stopPropagation(); n.collapsed = false; saveNotes(); render(); } }, '+' + countNodes(n.children)) : null,
+          // licznik ukrytych podwęzłów jest tylko informacją (nie przycisk) — dotknięcie go nie blokuje przeciągania; rozwija strzałka po lewej
+          !open && hasKids ? h('span', { class: 'count', title: 'Ukryte podwęzły', 'aria-label': countNodes(n.children) + ' ukrytych podwęzłów' }, '+' + countNodes(n.children)) : null,
           depth === 0 ? h('time', { datetime: n.created }, fmtDate(n.created)) : null)),
       // › wchodzi w notatkę z podgałęziami; w wynikach wyszukiwania także przy wpisie bez podgałęzi (otwiera wątek jego rodzica)
       !isArch() && (hasKids || (isFiltering() && depth > 0))

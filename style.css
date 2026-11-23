@@ -136,8 +136,7 @@ button.chip.on { background: var(--accent); color: var(--accent-ink); }
 .row.top .text { font-weight: 600; }
 .meta { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem; margin-top: .1rem; font-size: .72rem; color: var(--muted); }
 .meta:empty { display: none; }
-.count { background: var(--surface-2); border-radius: 999px; padding: 0 .45rem; position: relative; cursor: pointer; }
-.count::after { content: ""; position: absolute; inset: -.4rem -.3rem; }   /* niewidoczne powiększenie pola dotyku */
+.count { background: var(--surface-2); border-radius: 999px; padding: 0 .45rem; }
 /* wejście w notatkę (widok wątku) */
 .enter {
   flex: none; width: 2.1rem; height: 2.1rem; border-radius: 50%; margin-top: .1rem;
