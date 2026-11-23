@@ -1,7 +1,7 @@
 /* Service worker — cache-first dla powłoki aplikacji (działa offline).
    WAŻNE: przy każdej zmianie plików aplikacji zwiększ VERSION,
    wtedy użytkownicy dostaną komunikat „Dostępna nowa wersja”. */
-const VERSION = 'v29';
+const VERSION = 'v30';
 const CACHE = `drzewko-${VERSION}`;
 // Tekst Biblii (UBG, ~4 MB) ma osobny, niewersjonowany cache — nie pobiera się go ponownie przy każdej aktualizacji aplikacji.
 // Przy zmianie lib/ubg.json zmień nazwę BIBLE_CACHE (np. na -v2).

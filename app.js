@@ -674,6 +674,22 @@
     const t = $('#tree');
     if (anim) { t.classList.remove('nav-fwd', 'nav-back'); void t.offsetWidth; t.classList.add(anim); }
   }
+  // przycisk › w wierszu: notatka z podgałęziami → jej wątek; wpis bez podgałęzi (z wyników wyszukiwania) → wątek jego rodzica z podświetleniem wpisu.
+  // Wejście z wyszukiwania zamyka wyszukiwanie (widok wątku nie pokazuje się podczas filtrowania).
+  function enterFromRow(n) {
+    let id = n.id, flashId = null;
+    if (!n.children.length) {
+      const l = locate(n.id);
+      if (!l || !l.parent) return;
+      id = l.parent.id; flashId = n.id;
+    }
+    if (state.filter.open || isFiltering()) {
+      state.filter = { open: false, q: '', tag: null, fav: false };
+      $('#fInput').value = '';
+    }
+    enterNode(id);
+    if (flashId) setTimeout(() => flash(flashId), 250);
+  }
   function enterNode(id) {
     const n = (history.state && history.state.n) || 0;
     try { history.pushState({ n: n + 1, f: id }, ''); histN = n + 1; } catch (e) { /* bez historii też działa */ }
@@ -753,9 +769,12 @@
             onpointerdown: (e) => e.stopPropagation(), onkeydown: (e) => e.stopPropagation(),   // nie uruchamiaj przeciągania ani edycji
             onclick: (e) => { e.stopPropagation(); n.collapsed = false; saveNotes(); render(); } }, '+' + countNodes(n.children)) : null,
           depth === 0 ? h('time', { datetime: n.created }, fmtDate(n.created)) : null)),
-      hasKids && !isArch() && !isFiltering()
-        ? h('button', { class: 'enter', type: 'button', title: 'Wejdź w notatkę (tylko jej podgałęzie)', 'aria-label': 'Wejdź w notatkę: ' + plain(n.text),
-            onclick: () => enterNode(n.id) }, icon('chev'))
+      // › wchodzi w notatkę z podgałęziami; w wynikach wyszukiwania także przy wpisie bez podgałęzi (otwiera wątek jego rodzica)
+      !isArch() && (hasKids || (isFiltering() && depth > 0))
+        ? h('button', { class: 'enter', type: 'button',
+            title: hasKids ? 'Wejdź w notatkę (tylko jej podgałęzie)' : 'Pokaż w wątku (razem z sąsiednimi wpisami)',
+            'aria-label': (hasKids ? 'Wejdź w notatkę: ' : 'Pokaż w wątku: ') + plain(n.text),
+            onclick: () => enterFromRow(n) }, icon('chev'))
         : null,
       isArch() ? null : h('button', { class: 'add', type: 'button', title: 'Dodaj podwęzeł', 'aria-label': 'Dodaj podwęzeł',
         onclick: () => setTarget(n.id) }, icon('plus')));
