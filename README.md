@@ -14,7 +14,10 @@ eksportuje mapę myśli do SVG, PNG i HTML oraz sformatowany widok notatek do HT
 - Dolny pasek dodaje wpisy. Pole rośnie razem z tekstem (do 4 wierszy, potem się przewija); **Enter** dodaje wpis. Gdy wybrana jest notatka, nad polem pojawia się wiersz „↳ tytuł” z poziomem (`-`, `--`, `---`…) i przyciskami zmiany poziomu. Po dodaniu nowego tematu (notatki głównej) kolejne wpisy domyślnie trafiają pod niego — wyłączysz to w Ustawieniach → *Dodawanie*.
 - Przyciski `⇤` / `⇥` nad polem zmieniają poziom nowego wpisu (na komputerze: **Tab** / **Shift+Tab**),
   dzięki czemu mapę myśli wpisuje się bez odrywania się od klawiatury. Okrągły przycisk **＋** przy polu dodaje wpis.
-- Przycisk **＋** przy notatce dodaje do niej podwęzeł.
+- Przycisk **＋** przy notatce dodaje do niej podwęzeł (bez wchodzenia w nią).
+- Rozwijanie: dotknij dużej lewej kolumny wiersza (strzałka ˅ / ›) albo licznika „+3” przy zwiniętej gałęzi. Dotknięcie samego tekstu zawsze otwiera edycję.
+- **Wejście w notatkę (widok wątku):** okrągła strzałka **›** po prawej (przy notatkach z podgałęziami) pokazuje tylko tę notatkę i jej podgałęzie — z nagłówkiem, ścieżką „Wszystkie › … ›” i przyciskiem **←** u góry. Wyjście: ←, dotknięcie wybranego poziomu w ścieżce, „wstecz” w telefonie lub **Esc** na komputerze. W widoku wątku pasek dodawania domyślnie dodaje pod bieżącą notatką (⇤ nieaktywne na jej poziomie). Wyszukiwanie zawsze przeszukuje cały notatnik. Po ponownym uruchomieniu aplikacji wracasz do widoku „Wszystkie”.
+- Ulubione: gwiazdka ★ przy tytule notatki głównej oznacza ulubioną; przełączasz ją w oknie notatki („Dodaj do ulubionych”) albo gwiazdką w nagłówku widoku wątku. Filtr ulubionych jest w wyszukiwarce (lupa).
 - Tagi: wpisz `#tag` w treści (np. `Kupić mleko #zakupy`) albo dodaj je w oknie notatki.
 - Dotknięcie notatki otwiera jej okno: edycja treści i tagów, data utworzenia, przesuwanie w górę/w dół,
   wcięcie/wysunięcie, usuwanie.

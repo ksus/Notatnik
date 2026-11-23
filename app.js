@@ -14,6 +14,7 @@
     targetId: null,            // pod którym węzłem dodajemy (null = najwyższy poziom)
     filter: { open: false, q: '', tag: null, fav: false },
     view: 'main',              // 'main' = aktywne notatki, 'archive' = archiwum
+    focusId: null,             // notatka, w którą „weszliśmy” (widok wątku); null = wszystkie notatki
   };
   const toastEl = document.getElementById('toast');
 
@@ -48,6 +49,7 @@
     settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
     star: '<path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.9l-5.2 2.8 1-5.9-4.3-4.1 5.9-.8z"/>',
     chev: '<path d="m9 6 6 6-6 6"/>',
+    back: '<path d="m15 6-6 6 6 6"/>',
     archive: '<rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/>',
     unarchive: '<rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h2"/><path d="M20 8v11a2 2 0 0 1-2 2h-2"/><path d="m9 15 3-3 3 3"/><path d="M12 12v9"/>',
     trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
@@ -472,6 +474,10 @@
   }
   function removeNode(id) {
     const l = locate(id); if (!l) return;
+    if (state.focusId && (state.focusId === id || locate(state.focusId, l.node.children))) {
+      state.focusId = l.parent ? l.parent.id : null;   // usunięto bieżący wątek — wracamy poziom wyżej
+      state.targetId = state.focusId;
+    }
     l.list.splice(l.index, 1);
   }
   function setCollapsedAll(list, value) {
@@ -492,7 +498,7 @@
     });
   }
   function setView(v) {
-    state.view = v; state.targetId = null;
+    state.view = v; state.targetId = null; state.focusId = null;
     state.filter.tag = null; state.filter.fav = false;   // tagi dotyczą tylko bieżącego widoku
     $('#main').scrollTop = 0;
     render();
@@ -572,9 +578,18 @@
       return ul;
     };
 
-    const list = build(viewRoots(), 0, false);
-    tree.replaceChildren(list);
-    if (!list.children.length) {
+    const fo = filtering ? null : focusInfo();   // widok wątku (notatka + jej podgałęzie); wyszukiwanie zawsze obejmuje cały notatnik
+    const list = fo ? build(fo.node.children, fo.depth + 1, false) : build(viewRoots(), 0, false);
+    if (fo) {
+      list.classList.add('focus-list');
+      tree.replaceChildren(buildFocusHead(fo), list.children.length ? list
+        : h('div', { class: 'empty small' }, h('p', {}, 'Brak podwęzłów. Dodaj pierwszy z paska na dole.')));
+      // w widoku wątku nowe wpisy trafiają domyślnie pod bieżącą notatkę (albo pod jej potomka wybranego przyciskiem ＋)
+      if (!(state.targetId && (state.targetId === fo.node.id || locate(state.targetId, fo.node.children)))) state.targetId = fo.node.id;
+    } else {
+      tree.replaceChildren(list);
+    }
+    if (!fo && !list.children.length) {
       const archived = state.roots.length - activeRoots().length;
       if (filtering) tree.replaceChildren(h('div', { class: 'empty' }, h('p', {}, 'Brak pasujących notatek.')));
       else if (isArch()) tree.replaceChildren(h('div', { class: 'empty' },
@@ -584,7 +599,7 @@
         h('h2', {}, 'Wszystko w archiwum'),
         h('p', {}, `Aktywnych notatek: 0. W archiwum: ${archived}.`)));
     }
-    if (!state.roots.length) {
+    if (!fo && !state.roots.length) {
       tree.replaceChildren(h('div', { class: 'empty' },
         h('h2', {}, 'Tu będzie Twoje drzewo myśli'),
         h('p', {}, 'Wpisz pierwszą notatkę na dole. Dodaj ', h('code', {}, '#tag'), ', aby ją otagować.'),
@@ -614,6 +629,77 @@
       h('div', {}, h('b', {}, 'Archiwum'), ` · ${count}`),
       h('p', {}, 'Przeciągnij w prawo, aby przywrócić, w lewo, aby usunąć.'));
     $('#composer').hidden = arch;
+    // nagłówek: w widoku wątku ← i tytuł bieżącej notatki zamiast logo
+    const fo = (arch || isFiltering()) ? null : focusInfo(), h1 = $('.top h1');
+    if (h1Default === null) h1Default = h1.innerHTML;
+    if (fo) {
+      h1.classList.add('in-focus');
+      h1.replaceChildren(
+        h('button', { class: 'icon-btn back', type: 'button', title: 'Poziom wyżej', 'aria-label': 'Wróć poziom wyżej', onclick: () => navigateTo(fo.parent ? fo.parent.id : null, 1) }, icon('back')),
+        h('span', { class: 'top-title' }, plain(fo.node.text)));
+    } else if (h1.classList.contains('in-focus')) {
+      h1.classList.remove('in-focus'); h1.innerHTML = h1Default;
+    }
+  }
+
+  /* ================= Widok wątku (wejście w notatkę) ================= */
+  let h1Default = null, histN = 0;
+  // notatka, w której jesteśmy (z lokalizacją), albo null, gdy wątek nie istnieje / jest w archiwum
+  function focusInfo() {
+    if (!state.focusId || isArch()) return null;
+    const l = locate(state.focusId);
+    let top = l;
+    while (top && top.parent) top = locate(top.parent.id);
+    if (!l || !top || top.node.archived) { state.focusId = null; return null; }
+    return l;
+  }
+  const focusActive = () => (isFiltering() || isArch()) ? null : focusInfo();
+  function pathTo(id) {   // notatki od głównej do wskazanej
+    const arr = [];
+    for (let l = locate(id); l; l = l.parent ? locate(l.parent.id) : null) arr.unshift(l.node);
+    return arr;
+  }
+  function setFocus(id, anim) {
+    state.focusId = id; state.targetId = id;
+    $('#main').scrollTop = 0;
+    render();
+    const t = $('#tree');
+    if (anim) { t.classList.remove('nav-fwd', 'nav-back'); void t.offsetWidth; t.classList.add(anim); }
+  }
+  function enterNode(id) {
+    const n = (history.state && history.state.n) || 0;
+    try { history.pushState({ n: n + 1, f: id }, ''); histN = n + 1; } catch (e) { /* bez historii też działa */ }
+    setFocus(id, 'nav-fwd');
+  }
+  // wyjście o `levels` poziomów w górę do notatki toId (null = „Wszystkie”); przycisk „wstecz” w telefonie robi to samo
+  function navigateTo(toId, levels) {
+    const n = (history.state && history.state.n) || 0;
+    if (n >= levels) history.go(-levels);   // popstate ustawi widok
+    else {
+      try { history.replaceState(toId ? { n: 0, f: toId } : { n: 0 }, ''); histN = 0; } catch (e) { /* ignoruj */ }
+      setFocus(toId, 'nav-back');
+    }
+  }
+  function buildFocusHead(fo) {
+    const n = fo.node, isRoot = !fo.parent, path = pathTo(n.id);
+    const crumbs = [{ label: 'Wszystkie', id: null, level: 0 }, ...path.slice(0, -1).map((x, i) => ({ label: plain(x.text), id: x.id, level: i + 1 }))];
+    const shown = crumbs.length > 3 ? [crumbs[0], null, ...crumbs.slice(-2)] : crumbs;   // długą ścieżkę skracamy do „…”
+    const nav = h('nav', { class: 'crumbs', 'aria-label': 'Ścieżka' });
+    for (const c of shown) {
+      nav.append(c
+        ? h('button', { class: 'crumb', type: 'button', onclick: () => navigateTo(c.id, path.length - c.level) }, c.label)
+        : h('span', { class: 'crumb-dots' }, '…'),
+      h('span', { class: 'crumb-sep', 'aria-hidden': 'true' }, '›'));
+    }
+    const task = taskOf(n.text);
+    return h('div', { class: 'focus-head' }, nav,
+      h('div', { class: 'focus-row' },
+        h('button', { class: 'focus-title' + (task && task.done ? ' done' : ''), type: 'button', title: 'Edytuj notatkę', onclick: () => openNodeSheet(n.id) },
+          renderInline(task ? task.rest : n.text)),
+        isRoot ? h('button', { class: 'star' + (n.fav ? ' on' : ''), type: 'button', 'aria-pressed': String(!!n.fav),
+          title: n.fav ? 'Usuń z ulubionych' : 'Dodaj do ulubionych', 'aria-label': n.fav ? 'Usuń z ulubionych' : 'Dodaj do ulubionych',
+          onclick: () => { n.fav = !n.fav; saveNotes(); render(); } }, icon('star', '1.3em', !!n.fav)) : null),
+      isRoot ? h('div', { class: 'meta focus-meta' }, h('time', { datetime: n.created }, fmtDate(n.created)), ...n.tags.map((t) => h('span', { class: 'chip' }, '#' + t))) : null);
   }
 
   function buildRow(n, depth, ghost, open) {
@@ -640,6 +726,7 @@
         (() => {
           const task = taskOf(n.text);
           return h('span', { class: 'text' + (task && task.done ? ' done' : '') },
+            depth === 0 && n.fav ? h('span', { class: 'fav-mark', role: 'img', 'aria-label': 'Ulubione', title: 'Ulubione' }, icon('star', '.95em', true)) : null,
             task ? h('button', {
               class: 'cb' + (task.done ? ' on' : ''), type: 'button', role: 'checkbox', 'aria-checked': String(task.done),
               'aria-label': task.done ? 'Zadanie wykonane — odznacz' : 'Zadanie do zrobienia — zaznacz',
@@ -651,12 +738,14 @@
         })(),
         h('span', { class: 'meta' },
           depth === 0 ? n.tags.map((t) => h('span', { class: 'chip' }, '#' + t)) : null,
-          !open && hasKids ? h('span', { class: 'count', title: 'Ukryte podwęzły' }, '+' + countNodes(n.children)) : null,
+          !open && hasKids ? h('button', { class: 'count', type: 'button', title: 'Ukryte podwęzły — dotknij, aby rozwinąć',
+            'aria-label': 'Rozwiń: ' + countNodes(n.children) + ' ukrytych podwęzłów',
+            onpointerdown: (e) => e.stopPropagation(), onkeydown: (e) => e.stopPropagation(),   // nie uruchamiaj przeciągania ani edycji
+            onclick: (e) => { e.stopPropagation(); n.collapsed = false; saveNotes(); render(); } }, '+' + countNodes(n.children)) : null,
           depth === 0 ? h('time', { datetime: n.created }, fmtDate(n.created)) : null)),
-      depth === 0
-        ? h('button', { class: 'star' + (n.fav ? ' on' : ''), type: 'button', 'aria-pressed': String(!!n.fav),
-            title: n.fav ? 'Usuń z ulubionych' : 'Dodaj do ulubionych', 'aria-label': n.fav ? 'Usuń z ulubionych' : 'Dodaj do ulubionych',
-            onclick: () => { n.fav = !n.fav; saveNotes(); render(); } }, icon('star', '1.15em', !!n.fav))
+      hasKids && !isArch() && !isFiltering()
+        ? h('button', { class: 'enter', type: 'button', title: 'Wejdź w notatkę (tylko jej podgałęzie)', 'aria-label': 'Wejdź w notatkę: ' + plain(n.text),
+            onclick: () => enterNode(n.id) }, icon('chev'))
         : null,
       isArch() ? null : h('button', { class: 'add', type: 'button', title: 'Dodaj podwęzeł', 'aria-label': 'Dodaj podwęzeł',
         onclick: () => setTarget(n.id) }, icon('plus')));
@@ -883,8 +972,9 @@
     $('#cCtx').hidden = !t;   // bez wybranej notatki nie ma czego pokazywać (poziom to zawsze „główny”)
     if (t) { lbl.replaceChildren(icon('subnode', '1.1em')); lbl.title = 'Dodajesz pod:'; lbl.setAttribute('aria-label', 'Dodajesz pod:'); }
     $('#cCtxText').textContent = t ? plain(t.node.text) : '';
-    $('#cReset').hidden = !t;
-    $('#cOut').disabled = !t;
+    const fo = focusActive(), atFocus = !!(fo && state.targetId === fo.node.id);   // w widoku wątku nie wychodzimy ponad bieżącą notatkę
+    $('#cReset').hidden = !t || atFocus;
+    $('#cOut').disabled = !t || atFocus;
     $('#cIn').disabled = (t ? t.node.children : activeRoots()).length === 0;
     $('#cInput').placeholder = t ? 'Nowy podwęzeł…' : 'Nowa notatka…';
   }
@@ -941,7 +1031,7 @@
     $('#cAdd').addEventListener('click', () => { submitComposer(); });
     $('#cOut').addEventListener('click', () => { goOut(); });
     $('#cIn').addEventListener('click', () => { goDeeper(); });
-    $('#cReset').addEventListener('click', () => setTarget(null));
+    $('#cReset').addEventListener('click', () => { const fo = focusActive(); setTarget(fo ? fo.node.id : null); });
     $('#cInput').addEventListener('input', fitComposer);
     $('#cInput').addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); submitComposer(); }
@@ -1943,6 +2033,23 @@ ${nodes.map(note).join('\n')}
     $('#fInput').addEventListener('input', (e) => { state.filter.q = e.target.value; render(); });
 
     initComposer();
+    // widok wątku: „wstecz” w telefonie / przeglądarce wychodzi poziom wyżej; Esc robi to samo na komputerze
+    try { history.replaceState({ n: 0 }, ''); } catch (e) { /* ignoruj */ }
+    window.addEventListener('popstate', (e) => {
+      const n = (e.state && e.state.n) || 0, f = e.state && e.state.f;
+      const valid = f && locate(f) ? f : null;
+      const anim = n < histN ? 'nav-back' : 'nav-fwd';
+      histN = n;
+      document.querySelectorAll('dialog[open]').forEach((d) => d.close());
+      setFocus(valid, anim);
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape' || e.defaultPrevented || !state.focusId || document.querySelector('dialog[open]')) return;
+      const a = document.activeElement;
+      if (a && a.matches && a.matches('input, textarea, select') && a.value) return;   // najpierw Esc ma dotyczyć wpisywanego tekstu
+      const fo = focusActive(); if (!fo) return;
+      e.preventDefault(); navigateTo(fo.parent ? fo.parent.id : null, 1);
+    });
     // zabezpieczenie: gdyby puszczenie palca nie dotarło do notatki (np. przejęcie gestu przez system), kończymy gest tutaj
     window.addEventListener('pointerup', () => { if (dragging && gestureEnd) gestureEnd(true); });
     window.addEventListener('pointercancel', () => { if (dragging && gestureEnd) gestureEnd(false); });

@@ -106,11 +106,14 @@ button.chip.on { background: var(--accent); color: var(--accent-ink); }
   padding: .4rem .6rem 1rem .5rem;
 }
 #tree ul { list-style: none; margin: 0; padding: 0; }
-#tree .children { margin-left: .8rem; padding-left: .35rem; border-left: 1.5px solid var(--line); }
+#tree .children { margin-left: 1.15rem; padding-left: .3rem; border-left: 1.5px solid var(--line); }
+#tree .children.focus-list { margin-left: 0; padding-left: 0; border-left: 0; }
 
 .row { display: flex; align-items: flex-start; gap: .15rem; padding: .1rem 0; border-radius: .6rem; }
-.toggle, .toggle-spacer { flex: none; width: 1.7rem; height: 1.9rem; display: inline-flex; align-items: center; justify-content: center; }
-.toggle { color: var(--muted); border-radius: .5rem; }
+/* duża lewa strefa rozwijania (ok. 40 px), żeby łatwo w nią trafić kciukiem */
+.toggle, .toggle-spacer { flex: none; width: 2.4rem; height: 2.3rem; display: inline-flex; align-items: center; justify-content: center; }
+.toggle { color: var(--accent); background: var(--accent-soft); border-radius: .6rem; }
+.toggle:active { filter: brightness(.94); }
 .toggle .ico { transition: transform .15s ease; }
 .toggle.open .ico { transform: rotate(90deg); }
 .prefix {
@@ -128,9 +131,22 @@ button.chip.on { background: var(--accent); color: var(--accent-ink); }
 .row.top .text { font-weight: 600; }
 .meta { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem; margin-top: .1rem; font-size: .72rem; color: var(--muted); }
 .meta:empty { display: none; }
-.count { background: var(--surface-2); border-radius: 999px; padding: 0 .45rem; }
+.count {
+  background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: .78rem;
+  border-radius: 999px; padding: .3rem .65rem; margin: -.15rem 0; cursor: pointer;
+}
+.count:active { filter: brightness(.94); }
+/* wejście w notatkę (widok wątku) */
+.enter {
+  flex: none; width: 2.1rem; height: 2.1rem; border-radius: 50%; margin-top: .1rem;
+  color: var(--accent); background: var(--accent-soft);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.enter:active { filter: brightness(.92); }
+.fav-mark { display: inline-flex; vertical-align: -.1em; margin-right: .3rem; color: #d99a1c; }
+:root[data-theme="dark"] .fav-mark { color: #f0b840; }
 .add {
-  flex: none; width: 1.9rem; height: 1.9rem; border-radius: 50%; color: var(--muted);
+  flex: none; width: 2.1rem; height: 2.1rem; margin-top: .1rem; border-radius: 50%; color: var(--muted);
   display: inline-flex; align-items: center; justify-content: center;
 }
 .add:active { background: var(--accent-soft); color: var(--accent); }
@@ -347,3 +363,29 @@ a.ext-link { color: var(--accent); text-decoration: underline; text-underline-of
   color: var(--accent); background: var(--surface-2); text-decoration: none;
 }
 .ext-open:active { background: var(--line); }
+
+/* ===== Widok wątku (wejście w notatkę) ===== */
+.top h1.in-focus { flex: 1; min-width: 0; gap: .1rem; margin-left: -.5rem; }
+.top h1 .back { flex: none; }
+.top-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.focus-head { padding: .1rem .3rem .5rem .4rem; }
+.crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 0 .1rem; font-size: .8rem; color: var(--muted); }
+.crumb { color: var(--accent); padding: .35rem .3rem; border-radius: .5rem; max-width: 9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crumb:active { background: var(--accent-soft); }
+.crumb-dots { padding: .35rem .3rem; }
+.crumb-sep { opacity: .6; }
+.focus-row { display: flex; align-items: flex-start; gap: .3rem; }
+.focus-title {
+  flex: 1; min-width: 0; text-align: left; font-size: 1.35rem; font-weight: 700; line-height: 1.3;
+  padding: .1rem .3rem; border-radius: .5rem; overflow-wrap: anywhere;
+}
+.focus-title:active { background: var(--surface-2); }
+.focus-title.done { color: var(--muted); }
+.focus-title strong { font-weight: 800; }
+.focus-meta { padding: 0 .3rem; margin-top: .15rem; }
+.empty.small { padding: 1.2rem 1rem; }
+#tree.nav-fwd { animation: navFwd .18s ease-out; }
+#tree.nav-back { animation: navBack .18s ease-out; }
+@keyframes navFwd { from { opacity: 0; transform: translateX(18px); } to { opacity: 1; transform: none; } }
+@keyframes navBack { from { opacity: 0; transform: translateX(-18px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { #tree.nav-fwd, #tree.nav-back { animation: none; } }
