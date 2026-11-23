@@ -17,7 +17,8 @@ eksportuje mapę myśli do SVG, PNG i HTML oraz sformatowany widok notatek do HT
 - Przycisk **＋** przy notatce dodaje do niej podwęzeł (bez wchodzenia w nią).
 - Rozwijanie: dotknij dużej lewej kolumny wiersza (strzałka ˅ / ›) albo licznika „+3” przy zwiniętej gałęzi. Dotknięcie samego tekstu zawsze otwiera edycję.
 - **Wejście w notatkę (widok wątku):** okrągła strzałka **›** po prawej (przy notatkach z podgałęziami) pokazuje tylko tę notatkę i jej podgałęzie — z nagłówkiem, ścieżką „Wszystkie › … ›” i przyciskiem **←** u góry. Wyjście: ←, dotknięcie wybranego poziomu w ścieżce, „wstecz” w telefonie lub **Esc** na komputerze. W widoku wątku pasek dodawania domyślnie dodaje pod bieżącą notatką (⇤ nieaktywne na jej poziomie). Wyszukiwanie zawsze przeszukuje cały notatnik. Po ponownym uruchomieniu aplikacji wracasz do widoku „Wszystkie”.
-- Ulubione: gwiazdka ★ przy tytule notatki głównej oznacza ulubioną; przełączasz ją w oknie notatki („Dodaj do ulubionych”) albo gwiazdką w nagłówku widoku wątku. Filtr ulubionych jest w wyszukiwarce (lupa).
+- Ulubione: serduszko ♥ w wierszu z tagami i datą oznacza ulubioną notatkę główną; przełączasz je w oknie notatki („Dodaj do ulubionych”) albo serduszkiem w nagłówku widoku wątku. Filtr ulubionych jest w wyszukiwarce (lupa). W pliku `.md` ulubione nadal oznacza znak ★ w komentarzu (zgodność z wcześniejszymi eksportami).
+- Ikona aplikacji obok napisu „MindNotes” u góry jest przyciskiem: zwija wszystkie gałęzie (zostają same tytuły notatek głównych).
 - Tagi: wpisz `#tag` w treści (np. `Kupić mleko #zakupy`) albo dodaj je w oknie notatki.
 - Dotknięcie notatki otwiera jej okno: edycja treści i tagów, data utworzenia, przesuwanie w górę/w dół,
   wcięcie/wysunięcie, usuwanie.
@@ -61,7 +62,7 @@ więc mapa ich nie wyświetla:
 
 ## Eksport sformatowanego widoku (.html)
 
-Ta sama treść co w pliku `.md`, ale jako gotowa, sformatowana strona: notatka to nagłówek `<h1>` (z datą, ★ / 📦 i tagami),
+Ta sama treść co w pliku `.md`, ale jako gotowa, sformatowana strona: notatka to nagłówek `<h1>` (z datą, ♥ / 📦 i tagami),
 podwęzły to `<h2>`, głębsze poziomy to zagnieżdżone listy. Działają **pogrubienie**, *kursywa*, ~~przekreślenie~~, ==zakreślenie== i zadania `[ ]` / `[x]` (rysowane jako pola wyboru).
 
 - Całość: Ustawienia → Kopia zapasowa → **Widok .html** (jak w `.md` — razem z notatkami z archiwum, oznaczonymi 📦).

@@ -68,6 +68,12 @@ input { font: inherit; color: inherit; }
   display: flex; align-items: center; gap: .5rem;
 }
 .logo { color: var(--accent); }
+/* ikona aplikacji jest przyciskiem „zwiń wszystkie gałęzie” (większe pole dotyku, logo zostaje w tym samym miejscu) */
+.logo-btn {
+  flex: none; width: max(44px, 2.6rem); height: max(44px, 2.6rem); margin: 0 -.35rem 0 -.55rem; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center; color: var(--accent);
+}
+.logo-btn:active { background: var(--accent-soft); }
 .actions { display: flex; gap: .1rem; }
 .icon-btn {
   width: max(44px, 2.6rem); height: max(44px, 2.6rem);
@@ -139,8 +145,8 @@ button.chip.on { background: var(--accent); color: var(--accent-ink); }
   display: inline-flex; align-items: center; justify-content: center;
 }
 .enter:active { filter: brightness(.92); }
-.fav-mark { display: inline-flex; vertical-align: -.1em; margin-left: .35rem; color: #d99a1c; }
-:root[data-theme="dark"] .fav-mark { color: #f0b840; }
+.fav-mark { display: inline-flex; align-items: center; color: #d63f5a; }
+:root[data-theme="dark"] .fav-mark { color: #ff7a90; }
 .add {
   flex: none; width: 2.1rem; height: 2.1rem; margin-top: .1rem; border-radius: 50%; color: var(--muted);
   display: inline-flex; align-items: center; justify-content: center;
@@ -154,17 +160,19 @@ button.chip.on { background: var(--accent); color: var(--accent-ink); }
 
 .text strong { font-weight: 700; }
 .text del { text-decoration: line-through; opacity: .7; }
-.star {
-  flex: none; width: 1.9rem; height: 1.9rem; border-radius: 50%; color: var(--muted);
+/* serduszko „ulubione” w nagłówku widoku wątku (w wierszu z tagami) */
+.fav-btn {
+  flex: none; width: 1.9rem; height: 1.9rem; margin: -.3rem 0; border-radius: 50%; color: var(--muted);
   display: inline-flex; align-items: center; justify-content: center;
 }
-.star.on { color: #d99a1c; }
-:root[data-theme="dark"] .star.on { color: #f0b840; }
-.star:active { background: var(--accent-soft); }
-.chip.fav svg { margin-right: .1rem; }
+.fav-btn.on { color: #d63f5a; }
+:root[data-theme="dark"] .fav-btn.on { color: #ff7a90; }
+.fav-btn:active { background: var(--accent-soft); }
+.chip.fav svg { margin-right: .1rem; color: #d63f5a; }
+:root[data-theme="dark"] .chip.fav svg { color: #ff7a90; }
 .fav-toggle { width: 100%; margin: .2rem 0 .4rem; }
-.fav-toggle.on { color: #b27a0c; background: #fbf0d6; }
-:root[data-theme="dark"] .fav-toggle.on { color: #f0b840; background: #3a2f14; }
+.fav-toggle.on { color: #b32d46; background: #fde4e8; }
+:root[data-theme="dark"] .fav-toggle.on { color: #ff7a90; background: #3a1d23; }
 .fmtbar { display: flex; align-items: center; gap: .4rem; margin-top: .45rem; flex-wrap: wrap; }
 .fmtbar .hint { margin: 0 0 0 .2rem; font-size: .72rem; }
 .fmt { min-width: 2.4rem; height: 2.2rem; padding: 0 .6rem; border-radius: .6rem; background: var(--surface-2); font-weight: 700; }
