@@ -145,8 +145,8 @@ button.chip.on { background: var(--accent); color: var(--accent-ink); }
   display: inline-flex; align-items: center; justify-content: center;
 }
 .enter:active { filter: brightness(.92); }
-.fav-mark { display: inline-flex; align-items: center; color: #d63f5a; }
-:root[data-theme="dark"] .fav-mark { color: #ff7a90; }
+.fav-mark { display: inline-flex; align-items: center; color: #d99a1c; }
+:root[data-theme="dark"] .fav-mark { color: #f0b840; }
 .add {
   flex: none; width: 2.1rem; height: 2.1rem; margin-top: .1rem; border-radius: 50%; color: var(--muted);
   display: inline-flex; align-items: center; justify-content: center;
@@ -160,19 +160,18 @@ button.chip.on { background: var(--accent); color: var(--accent-ink); }
 
 .text strong { font-weight: 700; }
 .text del { text-decoration: line-through; opacity: .7; }
-/* serduszko „ulubione” w nagłówku widoku wątku (w wierszu z tagami) */
+/* gwiazdka „ulubione” w nagłówku widoku wątku (w wierszu z tagami, po tagach) */
 .fav-btn {
   flex: none; width: 1.9rem; height: 1.9rem; margin: -.3rem 0; border-radius: 50%; color: var(--muted);
   display: inline-flex; align-items: center; justify-content: center;
 }
-.fav-btn.on { color: #d63f5a; }
-:root[data-theme="dark"] .fav-btn.on { color: #ff7a90; }
+.fav-btn.on { color: #d99a1c; }
+:root[data-theme="dark"] .fav-btn.on { color: #f0b840; }
 .fav-btn:active { background: var(--accent-soft); }
-.chip.fav svg { margin-right: .1rem; color: #d63f5a; }
-:root[data-theme="dark"] .chip.fav svg { color: #ff7a90; }
+.chip.fav svg { margin-right: .1rem; }
 .fav-toggle { width: 100%; margin: .2rem 0 .4rem; }
-.fav-toggle.on { color: #b32d46; background: #fde4e8; }
-:root[data-theme="dark"] .fav-toggle.on { color: #ff7a90; background: #3a1d23; }
+.fav-toggle.on { color: #b27a0c; background: #fbf0d6; }
+:root[data-theme="dark"] .fav-toggle.on { color: #f0b840; background: #3a2f14; }
 .fmtbar { display: flex; align-items: center; gap: .4rem; margin-top: .45rem; flex-wrap: wrap; }
 .fmtbar .hint { margin: 0 0 0 .2rem; font-size: .72rem; }
 .fmt { min-width: 2.4rem; height: 2.2rem; padding: 0 .6rem; border-radius: .6rem; background: var(--surface-2); font-weight: 700; }

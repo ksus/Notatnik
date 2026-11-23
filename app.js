@@ -47,9 +47,7 @@
     x: '<path d="M18 6 6 18M6 6l12 12"/>',
     search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
     settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
-    star: '<path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.9l-5.2 2.8 1-5.9-4.3-4.1 5.9-.8z"/>',
-    heart: '<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>',
-    chev: '<path d="m9 6 6 6-6 6"/>',
+    star: '<path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.9l-5.2 2.8 1-5.9-4.3-4.1 5.9-.8z"/>',    chev: '<path d="m9 6 6 6-6 6"/>',
     back: '<path d="m15 6-6 6 6 6"/>',
     archive: '<rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/>',
     unarchive: '<rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h2"/><path d="M20 8v11a2 2 0 0 1-2 2h-2"/><path d="m9 15 3-3 3 3"/><path d="M12 12v9"/>',
@@ -606,7 +604,7 @@
         h('p', {}, 'Wpisz pierwszą notatkę na dole. Dodaj ', h('code', {}, '#tag'), ', aby ją otagować.'),
         h('p', {}, 'Formatuj: ', h('code', {}, '**pogrubienie**'), ' ', h('code', {}, '*kursywa*'), ' ', h('code', {}, '~~przekreślenie~~'), ' ', h('code', {}, '==zakreślenie==')),
         h('p', {}, 'Zadania: ', h('code', {}, '[ ] do zrobienia'), ' ', h('code', {}, '[x] zrobione')),
-        h('p', {}, 'Przycisk ＋ przy notatce dodaje podwęzeł, ♥ oznacza ulubione.')));
+        h('p', {}, 'Przycisk ＋ przy notatce dodaje podwęzeł, ★ oznacza ulubione.')));
     }
     renderChrome();
     renderFilterBar();
@@ -707,10 +705,10 @@
         h('button', { class: 'focus-title' + (task && task.done ? ' done' : ''), type: 'button', title: 'Edytuj notatkę', onclick: () => openNodeSheet(n.id) },
           renderInline(task ? task.rest : n.text))),
       isRoot ? h('div', { class: 'meta focus-meta' },
+        ...n.tags.map((t) => h('span', { class: 'chip' }, '#' + t)),
         h('button', { class: 'fav-btn' + (n.fav ? ' on' : ''), type: 'button', 'aria-pressed': String(!!n.fav),
           title: n.fav ? 'Usuń z ulubionych' : 'Dodaj do ulubionych', 'aria-label': n.fav ? 'Usuń z ulubionych' : 'Dodaj do ulubionych',
-          onclick: () => { n.fav = !n.fav; saveNotes(); render(); } }, icon('heart', '1.15em', !!n.fav)),
-        ...n.tags.map((t) => h('span', { class: 'chip' }, '#' + t)),
+          onclick: () => { n.fav = !n.fav; saveNotes(); render(); } }, icon('star', '1.15em', !!n.fav)),
         h('time', { datetime: n.created }, fmtDate(n.created))) : null);
   }
 
@@ -748,8 +746,8 @@
             renderInline(task ? task.rest : n.text));
         })(),
         h('span', { class: 'meta' },
-          depth === 0 && n.fav ? h('span', { class: 'fav-mark', role: 'img', 'aria-label': 'Ulubione', title: 'Ulubione' }, icon('heart', '1.1em', true)) : null,   // ♥ w wierszu tagów
           depth === 0 ? n.tags.map((t) => h('span', { class: 'chip' }, '#' + t)) : null,
+          depth === 0 && n.fav ? h('span', { class: 'fav-mark', role: 'img', 'aria-label': 'Ulubione', title: 'Ulubione' }, icon('star', '1.1em', true)) : null,   // ★ w wierszu tagów, po tagach
           !open && hasKids ? h('button', { class: 'count', type: 'button', title: 'Ukryte podwęzły — dotknij, aby rozwinąć',
             'aria-label': 'Rozwiń: ' + countNodes(n.children) + ' ukrytych podwęzłów',
             onpointerdown: (e) => e.stopPropagation(), onkeydown: (e) => e.stopPropagation(),   // nie uruchamiaj przeciągania ani edycji
@@ -953,7 +951,7 @@
       h('button', {
         class: 'chip fav' + (state.filter.fav ? ' on' : ''), type: 'button', 'aria-pressed': String(state.filter.fav),
         onclick: () => { state.filter.fav = !state.filter.fav; render(); },
-      }, icon('heart', '.95em', true), 'Ulubione'),
+      }, icon('star', '.95em', true), 'Ulubione'),
       ...tags.map(({ tag, count }) =>
         h('button', {
           class: 'chip' + (state.filter.tag === tag ? ' on' : ''), type: 'button',
@@ -1345,7 +1343,7 @@
 
       isRoot ? h('button', { class: 'btn fav-toggle' + (node.fav ? ' on' : ''), type: 'button', 'aria-pressed': String(!!node.fav),
         onclick: act((id) => { const l = locate(id); if (l) l.node.fav = !l.node.fav; }) },
-        icon('heart', '1.2em', !!node.fav), node.fav ? 'W ulubionych' : 'Dodaj do ulubionych') : null,
+        icon('star', '1.2em', !!node.fav), node.fav ? 'W ulubionych' : 'Dodaj do ulubionych') : null,
 
       isRoot ? h('div', { class: 'field' },
         h('span', { class: 'lbl' }, 'Tagi'),
@@ -1633,7 +1631,7 @@ footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--line);color:v
       return `<h2>${label(n.text)}</h2>\n${list(n.children)}`;
     };
     const note = (n) => {
-      const meta = [exportDate(n.created), ...(n.fav ? ['♥'] : []), ...(n.archived ? ['📦 archiwum'] : [])]
+      const meta = [exportDate(n.created), ...(n.fav ? ['★'] : []), ...(n.archived ? ['📦 archiwum'] : [])]
         .map((s) => `<span>${escHtml(s)}</span>`)
         .concat(n.tags.map((t) => `<span class="tag">#${escHtml(t)}</span>`)).join('');
       return `<section class="note">\n<h1>${label(n.text)}</h1>\n<div class="meta">${meta}</div>\n${n.children.map(section).join('\n')}\n</section>`;
