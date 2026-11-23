@@ -100,14 +100,52 @@
   const TASK_RE = /^\[([ xX])\]\s+(\S.*)$/;
   const taskOf = (text) => { const m = TASK_RE.exec(text); return m ? { done: m[1] !== ' ', rest: m[2] } : null; };
 
-  function renderInline(text, level = 0) {
+  /* ----- linki www: http(s)://… i www.… w treści wpisów ----- */
+  // Adresy są na czas formatowania zamieniane na znaczniki (\uE000n\uE001), żeby ** -- ~~ == wewnątrz adresu go nie psuły.
+  const URL_RE = /\b(?:https?:\/\/|www\.)[^\s<>"'`\uE000\uE001]+/gi;
+  const URL_TOKEN_RE = /\uE000(\d+)\uE001/g;
+  function extractUrls(text) {
+    const urls = [];
+    const t = String(text).replace(URL_RE, (m) => {
+      let url = m, tail = '';
+      for (;;) { // odetnij znaki, które zwykle kończą zdanie lub formatowanie, a nie adres
+        const c = url[url.length - 1];
+        const unbalanced = c === ')' && (url.match(/\(/g) || []).length < (url.match(/\)/g) || []).length;
+        if (/[.,;:!?*~=\-'"\]}»”…]/.test(c) || unbalanced) { tail = c + tail; url = url.slice(0, -1); } else break;
+      }
+      if (!/^(https?:\/\/|www\.)[^/.\s]/i.test(url)) return m; // sam „www.” bez domeny — nie link
+      urls.push(url);
+      return '\uE000' + (urls.length - 1) + '\uE001' + tail;
+    });
+    return { t, urls };
+  }
+  const urlHref = (u) => (/^https?:\/\//i.test(u) ? u : 'https://' + u);
+  // tekst + znaczniki adresów → fragment DOM z klikalnymi linkami (nowa karta przeglądarki)
+  function linkFrag(str, urls) {
+    const frag = document.createDocumentFragment();
+    let last = 0, m;
+    const re = new RegExp(URL_TOKEN_RE.source, 'g');
+    while ((m = re.exec(str))) {
+      if (m.index > last) frag.append(str.slice(last, m.index));
+      const u = urls[Number(m[1])];
+      frag.append(h('a', { class: 'ext-link', href: urlHref(u), target: '_blank', rel: 'noopener noreferrer', title: urlHref(u),
+        // klik w link nie otwiera okna notatki i nie zaczyna przeciągania / przesuwania wpisu
+        onclick: (e) => e.stopPropagation(), onpointerdown: (e) => e.stopPropagation(), onkeydown: (e) => e.stopPropagation() }, u));
+      last = m.index + m[0].length;
+    }
+    if (last < str.length) frag.append(str.slice(last));
+    return frag;
+  }
+
+  function renderInline(text, level = 0, urls) {
+    if (level === 0 && !urls) { const x = extractUrls(text); text = x.t; urls = x.urls; }
     const frag = document.createDocumentFragment();
     const re = new RegExp(INLINE_SRC, 'g');
     let last = 0, m;
     while ((m = re.exec(text))) {
-      if (m.index > last) frag.append(text.slice(last, m.index));
+      if (m.index > last) frag.append(linkFrag(text.slice(last, m.index), urls));
       const [, mark, inner] = m;
-      const content = level < 4 ? renderInline(inner, level + 1) : inner;
+      const content = level < 4 ? renderInline(inner, level + 1, urls) : linkFrag(inner, urls);
       let el;
       if (mark === '***') el = h('strong', {}, h('em', {}, content));
       else if (mark === '**') el = h('strong', {}, content);
@@ -117,7 +155,7 @@
       frag.append(el);
       last = m.index + m[0].length;
     }
-    if (last < text.length) frag.append(text.slice(last));
+    if (last < text.length) frag.append(linkFrag(text.slice(last), urls));
     return frag;
   }
   // tekst bez znaczników (do wyszukiwania i podpisów)
@@ -180,10 +218,10 @@
   }
 
   /* ================= Automatyczne kopie zapasowe =================
-     Warstwa 1: migawki w IndexedDB (ostatnie 10), przywracanie w Ustawieniach.
+     Warstwa 1: migawki w IndexedDB (ostatnie 3), przywracanie w Ustawieniach.
      Warstwa 2: automatyczny zapis pliku .md na dysku (File System Access API — Chrome/Edge na komputerze).
      Warstwa 3: przypomnienie o kopii zewnętrznej (eksport / udostępnij), gdy minął tydzień. */
-  const BK = { DB: 'drzewko.backup', MAX: 10, GAP: 3 * 3600e3, FILE_DELAY: 20000, SNAP_DELAY: 5000 };
+  const BK = { DB: 'drzewko.backup', MAX: 3, GAP: 3 * 3600e3, FILE_DELAY: 20000, SNAP_DELAY: 5000 };
   const bkFileSupported = typeof window.showSaveFilePicker === 'function';
   let bkDbP = null, bkSnapTimer = 0, bkFileTimer = 0, bkHandle = null, bkFileStatus = '';   // '', 'ok', 'perm', 'err'
 
@@ -1463,6 +1501,7 @@ ul ul{margin:.15rem 0}
 li{margin:.2rem 0}
 li.task{list-style:none;margin-left:-1.4rem;padding-left:0}
 mark{background:var(--mark);color:inherit;padding:0 .15em;border-radius:3px}
+a{color:var(--accent);overflow-wrap:anywhere}
 del{opacity:.7}
 .cb{display:inline-block;position:relative;box-sizing:border-box;width:.95em;height:.95em;margin-right:.45em;vertical-align:-.12em;border:1.6px solid currentColor;border-radius:.2em;opacity:.8}
 .cb.on{background:var(--accent);border-color:var(--accent);opacity:1}
@@ -1552,13 +1591,18 @@ ${nodes.map(note).join('\n')}
 
   const escHtml = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   // etykieta węzła jako HTML (markmap renderuje treść węzła jako HTML)
-  function inlineHtml(text, level = 0) {
+  function inlineHtml(text, level = 0, urls) {
+    if (level === 0 && !urls) { const x = extractUrls(text); text = x.t; urls = x.urls; }
+    const esc = (str) => escHtml(str).replace(URL_TOKEN_RE, (_, i) => {
+      const u = urls[Number(i)];
+      return `<a href="${escHtml(urlHref(u))}" target="_blank" rel="noopener noreferrer">${escHtml(u)}</a>`;
+    });
     const re = new RegExp(INLINE_SRC, 'g');
     let out = '', last = 0, m;
     while ((m = re.exec(text))) {
-      out += escHtml(text.slice(last, m.index));
+      out += esc(text.slice(last, m.index));
       const [, mark, inner] = m;
-      const c = level < 4 ? inlineHtml(inner, level + 1) : escHtml(inner);
+      const c = level < 4 ? inlineHtml(inner, level + 1, urls) : esc(inner);
       out += mark === '***' ? `<strong><em>${c}</em></strong>`
         : mark === '**' ? `<strong>${c}</strong>`
         : mark === '*' ? `<em>${c}</em>`
@@ -1566,7 +1610,7 @@ ${nodes.map(note).join('\n')}
         : `<del>${c}</del>`;
       last = m.index + m[0].length;
     }
-    return out + escHtml(text.slice(last));
+    return out + esc(text.slice(last));
   }
   // jeden korzeń mapy: pojedyncza notatka / gałąź albo „MindNotes” z notatkami jako gałęziami
   function toMarkmapTree(nodes, title) {
@@ -1857,7 +1901,11 @@ ${nodes.map(note).join('\n')}
               actions: [{ value: 'del', label: 'Usuń wszystko', kind: 'danger' }, { value: '', label: 'Anuluj' }] });
             if (ans === 'del') { dlg.close(); destructive('Usunięto wszystkie notatki', () => { state.roots = []; state.targetId = null; }, { backup: true }); }
           } }, icon('trash'), 'Usuń wszystkie notatki'),
-        h('p', { class: 'hint' }, `Liczba notatek: ${countNodes(state.roots)}`))));
+        h('p', { class: 'hint' }, `Liczba notatek: ${countNodes(state.roots)}`)),
+
+      h('div', { class: 'section' },
+        h('h3', {}, 'O aplikacji'),
+        h('p', { class: 'hint' }, 'Autor projektu: ', h('a', { class: 'ext-link', href: 'mailto:krysus@gmail.com' }, 'krysus@gmail.com')))));
     dlg.showModal();
   }
 

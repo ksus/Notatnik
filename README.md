@@ -19,6 +19,7 @@ eksportuje mapę myśli do SVG, PNG i HTML oraz sformatowany widok notatek do HT
 - Dotknięcie notatki otwiera jej okno: edycja treści i tagów, data utworzenia, przesuwanie w górę/w dół,
   wcięcie/wysunięcie, usuwanie.
 - Kolejność notatek głównych: przytrzymaj palec na tytule notatki (ok. 0,4 s, telefon krótko zawibruje) i przeciągnij; przy krawędzi ekranu lista sama się przewija. Na komputerze wystarczy złapać tytuł myszą. Z klawiatury: Alt + ↑ / ↓ na wybranej notatce. Przeciąganie jest wyłączone podczas wyszukiwania i filtrowania.
+- Linki: adresy `https://…` i `www.…` we wpisach są klikalne i otwierają się w nowej karcie przeglądarki (kliknięcie w link nie otwiera okna notatki). W eksporcie „Widok .html” też są linkami.
 - Formatowanie: `**pogrubienie**`, `*kursywa*`, `~~przekreślenie~~`, `==zakreślenie==`. Zadania: `[ ] do zrobienia` i `[x] zrobione` na początku tekstu — przy notatce pojawia się pole wyboru, które zaznaczasz dotknięciem. W oknie notatki są przyciski B / I / S / H oraz ☑ (przełącza: brak → `[ ]` → `[x]` → brak).
 - Archiwum notatek głównych: przesuń notatkę palcem **w prawo**, aby przenieść ją do archiwum, albo **w lewo**, aby ją usunąć (oba ruchy można cofnąć przyciskiem „Cofnij”). Za krótkie przesunięcie wraca na miejsce. To samo jest w oknie notatki: „Przenieś do archiwum”.
 - Przycisk archiwum (pudełko, z licznikiem) u góry otwiera listę zarchiwizowanych tematów. W archiwum przesunięcie w prawo **przywraca** notatkę, w lewo usuwa ją na stałe (też z „Cofnij”). Archiwum ma własne wyszukiwanie i tagi.
@@ -104,7 +105,7 @@ Aplikacja działa offline dzięki service workerowi (`sw.js`). Po zmianie dowoln
 Notatki są w `localStorage` przeglądarki, na danym urządzeniu i pod danym adresem. Nie synchronizują się między telefonami
 i znikają po wyczyszczeniu danych strony — dlatego aplikacja robi automatyczne kopie lokalne (Ustawienia → *Automatyczne kopie*):
 
-1. **Migawki w IndexedDB** — do 10 ostatnich kopii; powstają po zmianach (nie częściej niż co 3 godziny, tylko gdy dane się zmieniły),
+1. **Migawki w IndexedDB** — do 3 ostatnich kopii; powstają po zmianach (nie częściej niż co 3 godziny, tylko gdy dane się zmieniły),
    przy starcie, przy zamknięciu karty oraz zawsze tuż przed importem, „Usuń wszystkie notatki” i przywróceniem kopii.
    Listę (data, liczba notatek) i przycisk *Przywróć* znajdziesz w Ustawieniach. Kopie są w tej samej przeglądarce co notatki,
    więc czyszczenie danych strony usuwa też je.
@@ -115,3 +116,6 @@ i znikają po wyczyszczeniu danych strony — dlatego aplikacja robi automatyczn
    z przyciskiem *Zrób kopię* (na telefonach otwiera menu udostępniania). Najpewniejsza kopia na iOS/Androidzie to `.md` zapisany w chmurze lub wysłany sobie.
 
 Eksport `.md` nadal warto robić ręcznie od czasu do czasu.
+
+## Autor
+Autor projektu: Krystian — [krysus@gmail.com](mailto:krysus@gmail.com)

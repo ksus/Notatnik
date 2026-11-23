@@ -336,3 +336,7 @@ dialog.sheet::backdrop { background: rgba(10, 12, 16, .5); }
 .vrow::-webkit-scrollbar { display: none; }
 .vrow .chip { flex: none; padding: .3rem .75rem; font-size: .9rem; }
 .vpreview { font-size: .8rem; color: var(--muted); padding: 0 .2rem .35rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* linki www we wpisach */
+a.ext-link { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; word-break: break-word; }
+.text a.ext-link { cursor: pointer; }
