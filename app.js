@@ -55,6 +55,7 @@
     down: '<path d="M12 5v14M6 13l6 6 6-6"/>',
     indent: '<path d="M4 4v16M9 12h11M15 7l5 5-5 5"/>',
     subnode: '<path d="M5 4v8a3 3 0 0 0 3 3h11M15 10l5 5-5 5"/>',
+    external: '<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
     outdent: '<path d="M20 4v16M15 12H4M9 7l-5 5 5 5"/>',
     download: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
     upload: '<path d="M12 16V5M7 10l5-5 5 5M5 20h14"/>',
@@ -119,6 +120,7 @@
     });
     return { t, urls };
   }
+  const urlLabel = (u) => { try { return new URL(urlHref(u)).hostname.replace(/^www\./i, '') || u; } catch (e) { return u; } };
   const urlHref = (u) => (/^https?:\/\//i.test(u) ? u : 'https://' + u);
   // tekst + znaczniki adresów → fragment DOM z klikalnymi linkami (nowa karta przeglądarki)
   function linkFrag(str, urls) {
@@ -128,9 +130,13 @@
     while ((m = re.exec(str))) {
       if (m.index > last) frag.append(str.slice(last, m.index));
       const u = urls[Number(m[1])];
-      frag.append(h('a', { class: 'ext-link', href: urlHref(u), target: '_blank', rel: 'noopener noreferrer', title: urlHref(u),
-        // klik w link nie otwiera okna notatki i nie zaczyna przeciągania / przesuwania wpisu
-        onclick: (e) => e.stopPropagation(), onpointerdown: (e) => e.stopPropagation(), onkeydown: (e) => e.stopPropagation() }, u));
+      const href = urlHref(u);
+      // sam adres (skrócony do domeny) jest zwykłym tekstem wpisu: dotknięcie edytuje, przesuwanie i przeciąganie działają;
+      // link otwiera dopiero osobna ikonka ↗ obok (nowa karta przeglądarki)
+      frag.append(
+        h('span', { class: 'ext-url', title: href }, urlLabel(u)),
+        h('a', { class: 'ext-open', href, target: '_blank', rel: 'noopener noreferrer', 'aria-label': 'Otwórz link: ' + urlLabel(u), title: 'Otwórz w nowej karcie: ' + href,
+          onclick: (e) => e.stopPropagation(), onpointerdown: (e) => e.stopPropagation(), onkeydown: (e) => e.stopPropagation() }, icon('external', '.95em')));
       last = m.index + m[0].length;
     }
     if (last < str.length) frag.append(str.slice(last));

@@ -339,4 +339,11 @@ dialog.sheet::backdrop { background: rgba(10, 12, 16, .5); }
 
 /* linki www we wpisach */
 a.ext-link { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; word-break: break-word; }
-.text a.ext-link { cursor: pointer; }
+/* adres we wpisie: tekst (edycja po dotknięciu) + osobna ikonka otwierająca link */
+.ext-url { color: var(--accent); text-decoration: underline dotted; text-underline-offset: 3px; overflow-wrap: anywhere; }
+.ext-open {
+  display: inline-flex; align-items: center; justify-content: center; vertical-align: middle;
+  min-width: 1.9rem; min-height: 1.9rem; margin: -.3rem .1rem -.3rem .15rem; border-radius: 50%;
+  color: var(--accent); background: var(--surface-2); text-decoration: none;
+}
+.ext-open:active { background: var(--line); }
