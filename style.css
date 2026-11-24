@@ -143,8 +143,8 @@ button.chip.on { background: var(--accent); color: var(--accent-ink); }
   color: var(--accent); background: var(--surface-2);
   display: inline-flex; align-items: center; justify-content: center;
 }
-.enter .ico { width: 1.15em; height: 1.15em; }
-.enter .ico, .enter .ico * { stroke-width: 3; }
+.enter .ico { width: 1.1em; height: 1.1em; }
+.enter .ico, .enter .ico * { stroke-width: 2.3; }
 .enter:active { background: var(--line); }
 .add { touch-action: manipulation; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
 .fav-mark { display: inline-flex; align-items: center; color: #d99a1c; }

@@ -778,7 +778,13 @@
         onpointerdown: (e) => {
           const btn = e.currentTarget, pid = e.pointerId, x0 = e.clientX, y0 = e.clientY;
           btn.dataset.held = '';
-          const t = setTimeout(() => { btn.dataset.held = '1'; try { navigator.vibrate && navigator.vibrate(15); } catch (err) { /* ignoruj */ } enterFromRow(n, true); setTimeout(() => { const ci = $('#cInput'); if (ci) ci.focus(); }, 60); }, 500);   // wątek + aktywne pole wpisu z kursorem
+          const t = setTimeout(() => { btn.dataset.held = '1'; try { navigator.vibrate && navigator.vibrate(15); } catch (err) { /* ignoruj */ } enterFromRow(n, true);
+            // pole wpisu z kursorem: od razu (mysz/Android) i jeszcze raz przy puszczeniu palca — telefony (zwłaszcza iPhone) pokazują klawiaturę tylko po gestie użytkownika
+            const focusInput = () => { const ci = $('#cInput'); if (ci) ci.focus(); };
+            setTimeout(focusInput, 60);
+            const onRelease = () => { window.removeEventListener('pointerup', onRelease, true); window.removeEventListener('pointercancel', onRelease, true); focusInput(); };
+            window.addEventListener('pointerup', onRelease, true); window.addEventListener('pointercancel', onRelease, true);
+          }, 500);
           const stop = (ev) => {
             if (ev.type === 'pointermove' && (ev.pointerId !== pid || Math.hypot(ev.clientX - x0, ev.clientY - y0) < 10)) return;
             clearTimeout(t);
