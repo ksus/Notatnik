@@ -676,9 +676,9 @@
   }
   // przycisk › w wierszu: notatka z podgałęziami → jej wątek; wpis bez podgałęzi (z wyników wyszukiwania) → wątek jego rodzica z podświetleniem wpisu.
   // Wejście z wyszukiwania zamyka wyszukiwanie (widok wątku nie pokazuje się podczas filtrowania).
-  function enterFromRow(n) {
+  function enterFromRow(n, self) {
     let id = n.id, flashId = null;
-    if (!n.children.length && isFiltering()) {   // z wyników: wpis bez podgałęzi → wątek rodzica (jeśli ma rodzica)
+    if (!self && !n.children.length && isFiltering()) {   // z wyników: wpis bez podgałęzi → wątek rodzica (jeśli ma rodzica)
       const l = locate(n.id);
       if (l && l.parent) { id = l.parent.id; flashId = n.id; }
     }
@@ -733,7 +733,21 @@
     return h('div', { class: 'row' + (depth === 0 ? ' top' : '') + (n.id === state.targetId ? ' target' : '') + (ghost ? ' ghost' : '') },
       hasKids
         ? h('button', { class: 'toggle' + (open ? ' open' : ''), type: 'button', 'aria-label': open ? 'Zwiń' : 'Rozwiń',
-            onclick: () => { n.collapsed = !n.collapsed; saveNotes(); render(); } }, icon('chev'))
+            // krótkie dotknięcie rozwija/zwija; przytrzymanie (~0,5 s) wchodzi w wątek notatki
+            onpointerdown: (e) => {
+              if (isArch()) return;
+              const btn = e.currentTarget, pid = e.pointerId, x0 = e.clientX, y0 = e.clientY;
+              btn.dataset.held = '';
+              const t = setTimeout(() => { btn.dataset.held = '1'; try { navigator.vibrate && navigator.vibrate(15); } catch (err) { /* ignoruj */ } enterFromRow(n, true); }, 500);
+              const stop = (ev) => {
+                if (ev.type === 'pointermove' && (ev.pointerId !== pid || Math.hypot(ev.clientX - x0, ev.clientY - y0) < 10)) return;
+                clearTimeout(t);
+                btn.removeEventListener('pointermove', stop); btn.removeEventListener('pointerup', stop); btn.removeEventListener('pointercancel', stop);
+              };
+              btn.addEventListener('pointermove', stop); btn.addEventListener('pointerup', stop); btn.addEventListener('pointercancel', stop);
+            },
+            oncontextmenu: (e) => e.preventDefault(),
+            onclick: (e) => { if (e.currentTarget.dataset.held) return; n.collapsed = !n.collapsed; saveNotes(); render(); } }, icon('chev'))
         : h('span', { class: 'toggle-spacer' }),
       h('span', { class: 'prefix', 'aria-hidden': 'true' }, '-'.repeat(depth + 1)),
       h('div', {
@@ -767,10 +781,10 @@
           !open && hasKids ? h('span', { class: 'count', title: 'Ukryte podwęzły', 'aria-label': countNodes(n.children) + ' ukrytych podwęzłów' }, '+' + countNodes(n.children)) : null,
           depth === 0 ? h('time', { datetime: n.created }, fmtDate(n.created)) : null)),
       // › wchodzi w notatkę z podgałęziami; w wynikach wyszukiwania także przy wpisie bez podgałęzi (otwiera wątek jego rodzica)
-      !isArch()
+      !isArch() && (hasKids || (isFiltering() && depth > 0))
         ? h('button', { class: 'enter', type: 'button',
-            title: hasKids ? 'Wejdź w notatkę (tylko jej podgałęzie)' : (isFiltering() && depth > 0 ? 'Pokaż w wątku (razem z sąsiednimi wpisami)' : 'Wejdź w notatkę (jeszcze bez podgałęzi)'),
-            'aria-label': (hasKids ? 'Wejdź w notatkę: ' : 'Wejdź: ') + plain(n.text),
+            title: hasKids ? 'Wejdź w notatkę (tylko jej podgałęzie)' : 'Pokaż w wątku (razem z sąsiednimi wpisami)',
+            'aria-label': (hasKids ? 'Wejdź w notatkę: ' : 'Pokaż w wątku: ') + plain(n.text),
             onclick: () => enterFromRow(n) }, icon('chev'))
         : null,
       isArch() ? null : h('button', { class: 'add', type: 'button', title: 'Dodaj podwęzeł', 'aria-label': 'Dodaj podwęzeł',
@@ -1379,6 +1393,9 @@
           tool('down', 'W dół', siblingIndex(loc, 1) >= 0, (id) => moveNode(id, 1)),
           tool('indent', 'Wcięcie', siblingIndex(loc, -1) >= 0, indentNode),
           tool('outdent', 'Wysuń', !!parent, outdentNode))),
+
+      isArch() ? null : h('button', { class: 'btn', type: 'button', onclick: () => { const id = sheetCtx.id; commitSheet(); $('#sheet').close(); const l = locate(id); if (l) enterFromRow(l.node, true); } },
+        icon('chev'), 'Wejdź w wątek'),
 
       isArch() ? null : h('div', { class: 'two' },
         h('button', { class: 'btn', type: 'button', onclick: () => { const id = sheetCtx.id; commitSheet(); $('#sheet').close(); setTarget(id); } }, icon('plus'), 'Podwęzeł'),
