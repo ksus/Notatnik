@@ -678,10 +678,9 @@
   // Wejście z wyszukiwania zamyka wyszukiwanie (widok wątku nie pokazuje się podczas filtrowania).
   function enterFromRow(n) {
     let id = n.id, flashId = null;
-    if (!n.children.length) {
+    if (!n.children.length && isFiltering()) {   // z wyników: wpis bez podgałęzi → wątek rodzica (jeśli ma rodzica)
       const l = locate(n.id);
-      if (!l || !l.parent) return;
-      id = l.parent.id; flashId = n.id;
+      if (l && l.parent) { id = l.parent.id; flashId = n.id; }
     }
     if (state.filter.open || isFiltering()) {
       state.filter = { open: false, q: '', tag: null, fav: false };
@@ -768,10 +767,10 @@
           !open && hasKids ? h('span', { class: 'count', title: 'Ukryte podwęzły', 'aria-label': countNodes(n.children) + ' ukrytych podwęzłów' }, '+' + countNodes(n.children)) : null,
           depth === 0 ? h('time', { datetime: n.created }, fmtDate(n.created)) : null)),
       // › wchodzi w notatkę z podgałęziami; w wynikach wyszukiwania także przy wpisie bez podgałęzi (otwiera wątek jego rodzica)
-      !isArch() && (hasKids || (isFiltering() && depth > 0))
+      !isArch()
         ? h('button', { class: 'enter', type: 'button',
-            title: hasKids ? 'Wejdź w notatkę (tylko jej podgałęzie)' : 'Pokaż w wątku (razem z sąsiednimi wpisami)',
-            'aria-label': (hasKids ? 'Wejdź w notatkę: ' : 'Pokaż w wątku: ') + plain(n.text),
+            title: hasKids ? 'Wejdź w notatkę (tylko jej podgałęzie)' : (isFiltering() && depth > 0 ? 'Pokaż w wątku (razem z sąsiednimi wpisami)' : 'Wejdź w notatkę (jeszcze bez podgałęzi)'),
+            'aria-label': (hasKids ? 'Wejdź w notatkę: ' : 'Wejdź: ') + plain(n.text),
             onclick: () => enterFromRow(n) }, icon('chev'))
         : null,
       isArch() ? null : h('button', { class: 'add', type: 'button', title: 'Dodaj podwęzeł', 'aria-label': 'Dodaj podwęzeł',
