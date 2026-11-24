@@ -778,7 +778,7 @@
         onpointerdown: (e) => {
           const btn = e.currentTarget, pid = e.pointerId, x0 = e.clientX, y0 = e.clientY;
           btn.dataset.held = '';
-          const t = setTimeout(() => { btn.dataset.held = '1'; try { navigator.vibrate && navigator.vibrate(15); } catch (err) { /* ignoruj */ } enterFromRow(n, true); }, 500);
+          const t = setTimeout(() => { btn.dataset.held = '1'; try { navigator.vibrate && navigator.vibrate(15); } catch (err) { /* ignoruj */ } enterFromRow(n, true); setTimeout(() => { const ci = $('#cInput'); if (ci) ci.focus(); }, 60); }, 500);   // wątek + aktywne pole wpisu z kursorem
           const stop = (ev) => {
             if (ev.type === 'pointermove' && (ev.pointerId !== pid || Math.hypot(ev.clientX - x0, ev.clientY - y0) < 10)) return;
             clearTimeout(t);
