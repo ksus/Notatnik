@@ -733,21 +733,7 @@
     return h('div', { class: 'row' + (depth === 0 ? ' top' : '') + (n.id === state.targetId ? ' target' : '') + (ghost ? ' ghost' : '') },
       hasKids
         ? h('button', { class: 'toggle' + (open ? ' open' : ''), type: 'button', 'aria-label': open ? 'Zwiń' : 'Rozwiń',
-            // krótkie dotknięcie rozwija/zwija; przytrzymanie (~0,5 s) wchodzi w wątek notatki
-            onpointerdown: (e) => {
-              if (isArch()) return;
-              const btn = e.currentTarget, pid = e.pointerId, x0 = e.clientX, y0 = e.clientY;
-              btn.dataset.held = '';
-              const t = setTimeout(() => { btn.dataset.held = '1'; try { navigator.vibrate && navigator.vibrate(15); } catch (err) { /* ignoruj */ } enterFromRow(n, true); }, 500);
-              const stop = (ev) => {
-                if (ev.type === 'pointermove' && (ev.pointerId !== pid || Math.hypot(ev.clientX - x0, ev.clientY - y0) < 10)) return;
-                clearTimeout(t);
-                btn.removeEventListener('pointermove', stop); btn.removeEventListener('pointerup', stop); btn.removeEventListener('pointercancel', stop);
-              };
-              btn.addEventListener('pointermove', stop); btn.addEventListener('pointerup', stop); btn.addEventListener('pointercancel', stop);
-            },
-            oncontextmenu: (e) => e.preventDefault(),
-            onclick: (e) => { if (e.currentTarget.dataset.held) return; n.collapsed = !n.collapsed; saveNotes(); render(); } }, icon('chev'))
+            onclick: () => { n.collapsed = !n.collapsed; saveNotes(); render(); } }, icon('chev'))
         : h('span', { class: 'toggle-spacer' }),
       h('span', { class: 'prefix', 'aria-hidden': 'true' }, '-'.repeat(depth + 1)),
       h('div', {
@@ -787,8 +773,21 @@
             'aria-label': (hasKids ? 'Wejdź w notatkę: ' : 'Pokaż w wątku: ') + plain(n.text),
             onclick: () => enterFromRow(n) }, icon('chev'))
         : null,
-      isArch() ? null : h('button', { class: 'add', type: 'button', title: 'Dodaj podwęzeł', 'aria-label': 'Dodaj podwęzeł',
-        onclick: () => setTarget(n.id) }, icon('plus')));
+      // dotknięcie: dodawanie pod tą notatką; przytrzymanie (~0,5 s): wejście w jej wątek (także pusty), gotowy do dodawania wpisów
+      isArch() ? null : h('button', { class: 'add', type: 'button', title: 'Dodaj podwęzeł (przytrzymaj: wejdź w wątek)', 'aria-label': 'Dodaj podwęzeł',
+        onpointerdown: (e) => {
+          const btn = e.currentTarget, pid = e.pointerId, x0 = e.clientX, y0 = e.clientY;
+          btn.dataset.held = '';
+          const t = setTimeout(() => { btn.dataset.held = '1'; try { navigator.vibrate && navigator.vibrate(15); } catch (err) { /* ignoruj */ } enterFromRow(n, true); }, 500);
+          const stop = (ev) => {
+            if (ev.type === 'pointermove' && (ev.pointerId !== pid || Math.hypot(ev.clientX - x0, ev.clientY - y0) < 10)) return;
+            clearTimeout(t);
+            btn.removeEventListener('pointermove', stop); btn.removeEventListener('pointerup', stop); btn.removeEventListener('pointercancel', stop);
+          };
+          btn.addEventListener('pointermove', stop); btn.addEventListener('pointerup', stop); btn.addEventListener('pointercancel', stop);
+        },
+        oncontextmenu: (e) => e.preventDefault(),
+        onclick: (e) => { if (e.currentTarget.dataset.held) return; setTarget(n.id); } }, icon('plus')));
   }
 
   /* ================= Przeciąganie notatek (zmiana kolejności; główne i podwęzły w obrębie rodzica) ================= */
@@ -1394,12 +1393,12 @@
           tool('indent', 'Wcięcie', siblingIndex(loc, -1) >= 0, indentNode),
           tool('outdent', 'Wysuń', !!parent, outdentNode))),
 
-      isArch() ? null : h('button', { class: 'btn', type: 'button', onclick: () => { const id = sheetCtx.id; commitSheet(); $('#sheet').close(); const l = locate(id); if (l) enterFromRow(l.node, true); } },
-        icon('chev'), 'Wejdź w wątek'),
-
       isArch() ? null : h('div', { class: 'two' },
         h('button', { class: 'btn', type: 'button', onclick: () => { const id = sheetCtx.id; commitSheet(); $('#sheet').close(); setTarget(id); } }, icon('plus'), 'Podwęzeł'),
         h('button', { class: 'btn', type: 'button', onclick: () => { const p = parent ? parent.id : null; commitSheet(); $('#sheet').close(); setTarget(p); } }, icon('plus'), 'Obok')),
+      isArch() ? null : h('div', { class: 'stack', style: 'margin-top:.5rem' },
+        h('button', { class: 'btn', type: 'button', onclick: () => { const id = sheetCtx.id; commitSheet(); $('#sheet').close(); const l = locate(id); if (l) enterFromRow(l.node, true); } },
+          icon('chev'), 'Wejdź w wątek')),
 
       isRoot ? h('div', { class: 'stack', style: 'margin-top:.5rem' },
         h('button', { class: 'btn', type: 'button', onclick: () => archiveFromSheet() },

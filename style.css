@@ -144,7 +144,7 @@ button.chip.on { background: var(--accent); color: var(--accent-ink); }
   display: inline-flex; align-items: center; justify-content: center;
 }
 .enter:active { background: var(--accent-soft); }
-.toggle { touch-action: manipulation; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
+.add { touch-action: manipulation; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
 .fav-mark { display: inline-flex; align-items: center; color: #d99a1c; }
 :root[data-theme="dark"] .fav-mark { color: #f0b840; }
 .add {
