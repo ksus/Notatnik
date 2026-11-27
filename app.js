@@ -45,6 +45,10 @@
   const ICONS = {
     plus: '<path d="M12 5v14M5 12h14"/>',
     x: '<path d="M18 6 6 18M6 6l12 12"/>',
+    more: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
+    book: '<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5M9 7h6"/>',
+    unfold: '<path d="m7 15 5 5 5-5M7 9l5-5 5 5"/>',
+    fold: '<path d="m7 20 5-5 5 5M7 4l5 5 5-5"/>',
     map: '<circle cx="5" cy="12" r="2.2"/><circle cx="19" cy="5.5" r="2.2"/><circle cx="19" cy="18.5" r="2.2"/><path d="M7.2 12h3.3c2 0 2.5-1 2.5-2.5v-1c0-1 .8-3 4-3M7.2 12h3.3c2 0 2.5 1 2.5 2.5v1c0 1 .8 3 4 3"/>',
     fit: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
     search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
@@ -617,14 +621,8 @@
   // przycisk Archiwum (z licznikiem), pasek archiwum i widoczność paska dodawania
   function renderChrome() {
     const arch = isArch(), count = state.roots.length - activeRoots().length;
-    const b = $('#btnArchive'), badge = $('.badge', b);
-    b.classList.toggle('active', arch);
-    b.setAttribute('aria-pressed', String(arch));
-    const label = arch ? 'Wróć do notatek' : 'Archiwum' + (count ? ` (${count})` : '');
-    b.setAttribute('aria-label', label); b.title = label;
-    badge.textContent = String(count); 
-    // badge.hidden = arch || !count;
-    badge.hidden = true; // <-- zawsze ukryte (pokazywanie ilości notatek w archiwum)
+    const b = $('#btnMenu');
+    b.classList.toggle('active', arch);   // w archiwum ikona menu jest podświetlona (wyjście: Menu → Wróć do notatek)
     const bar = $('#archbar');
     bar.hidden = !arch;
     if (arch) bar.replaceChildren(
@@ -2136,6 +2134,49 @@ ${nodes.map(note).join('\n')}
     }, { backup: true });
   }
 
+  /* ================= Menu główne (⋯) ================= */
+  let menuEl = null;
+  function closeMenu() {
+    if (!menuEl) return;
+    menuEl.remove(); menuEl = null;
+    const b = $('#btnMenu'); if (b) b.setAttribute('aria-expanded', 'false');
+    document.removeEventListener('pointerdown', menuOutside, true);
+    window.removeEventListener('keydown', menuKey, true);
+    window.removeEventListener('resize', closeMenu);
+  }
+  function menuOutside(e) { if (menuEl && !menuEl.contains(e.target) && !e.target.closest('#btnMenu')) closeMenu(); }
+  function menuKey(e) {
+    if (!menuEl) return;
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeMenu(); $('#btnMenu').focus(); return; }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const items = [...menuEl.querySelectorAll('button')], i = items.indexOf(document.activeElement);
+      items[(i + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length].focus();
+    }
+  }
+  function openMenu() {
+    const arch = isArch(), archived = state.roots.length - activeRoots().length;
+    const item = (ico, label, fn) => h('button', { type: 'button', role: 'menuitem', onclick: () => { closeMenu(); fn(); } }, icon(ico), h('span', {}, label));
+    menuEl = h('div', { class: 'menu', role: 'menu', 'aria-label': 'Menu' },
+      item('book', 'Studium Biblii (3xZ)', openStudies),
+      item('map', 'Podgląd mapy myśli', openMapView),
+      item('archive', arch ? 'Wróć do notatek' : 'Archiwum' + (archived ? ` (${archived})` : ''), () => setView(arch ? 'main' : 'archive')),
+      h('hr', {}),
+      item('unfold', 'Rozwiń wszystko', () => { setCollapsedAll(state.roots, false); saveNotes(); render(); }),
+      item('fold', 'Zwiń wszystko', collapseAll),
+      h('hr', {}),
+      item('settings', 'Ustawienia', openSettings));
+    const b = $('#btnMenu'), r = b.getBoundingClientRect();
+    menuEl.style.top = (r.bottom + 4) + 'px';
+    menuEl.style.right = Math.max(8, window.innerWidth - r.right) + 'px';
+    document.body.append(menuEl);
+    b.setAttribute('aria-expanded', 'true');
+    document.addEventListener('pointerdown', menuOutside, true);
+    window.addEventListener('keydown', menuKey, true);
+    window.addEventListener('resize', closeMenu);
+    menuEl.querySelector('button').focus({ preventScroll: true });
+  }
+
   /* ================= Ustawienia ================= */
   const mqDark = matchMedia('(prefers-color-scheme: dark)');
   function applySettings() {
@@ -2298,13 +2339,9 @@ ${nodes.map(note).join('\n')}
     document.addEventListener('visibilitychange', updateWakeLock);
     updateWakeLock();
 
-    $('#btnArchive').append(icon('archive'), h('span', { class: 'badge', hidden: true }));
-    $('#btnArchive').addEventListener('click', () => setView(isArch() ? 'main' : 'archive'));
     $('#btnSearch').append(icon('search'));
-    const btnMap = h('button', { id: 'btnMap', class: 'icon-btn', type: 'button', 'aria-label': 'Podgląd mapy myśli', title: 'Podgląd mapy myśli', onclick: openMapView }, icon('map'));
-    $('#btnSearch').before(btnMap);
-    $('#btnSettings').append(icon('settings'));
-    $('#btnSettings').addEventListener('click', openSettings);
+    $('#btnMenu').append(icon('more'));
+    $('#btnMenu').addEventListener('click', () => (menuEl ? closeMenu() : openMenu()));
     $('#btnSearch').addEventListener('click', () => {
       state.filter.open = !state.filter.open;
       if (!state.filter.open) { state.filter.q = ''; state.filter.tag = null; state.filter.fav = false; $('#fInput').value = ''; }
