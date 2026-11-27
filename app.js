@@ -45,6 +45,7 @@
   const ICONS = {
     plus: '<path d="M12 5v14M5 12h14"/>',
     x: '<path d="M18 6 6 18M6 6l12 12"/>',
+    open: '<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
     more: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
     book: '<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5M9 7h6"/>',
     unfold: '<path d="m7 15 5 5 5-5M7 9l5-5 5 5"/>',
@@ -806,7 +807,7 @@
         ? h('button', { class: 'enter', type: 'button',
             title: hasKids ? 'Wejdź w notatkę (tylko jej podgałęzie)' : 'Pokaż w wątku (razem z sąsiednimi wpisami)',
             'aria-label': (hasKids ? 'Wejdź w notatkę: ' : 'Pokaż w wątku: ') + plain(n.text),
-            onclick: () => enterFromRow(n) }, icon('chev'))
+            onclick: () => enterFromRow(n) }, icon('open'))
         : null,
       // dotknięcie: dodawanie pod tą notatką; przytrzymanie (~0,5 s): wejście w jej wątek (także pusty), gotowy do dodawania wpisów
       isArch() ? null : h('button', { class: 'add', type: 'button', title: 'Dodaj podwęzeł (przytrzymaj: wejdź w wątek)', 'aria-label': 'Dodaj podwęzeł',

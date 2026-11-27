@@ -140,12 +140,12 @@ button.chip.on { background: var(--accent); color: var(--accent-ink); }
 /* wejście w notatkę (widok wątku) */
 .enter {
   flex: none; width: 1.9rem; height: 1.9rem; border-radius: 50%; margin: .2rem 0 0;
-  color: var(--accent); background: var(--surface-2);
+  color: var(--accent); background: none;
   display: inline-flex; align-items: center; justify-content: center;
 }
-.enter .ico { width: 1.1em; height: 1.1em; }
-.enter .ico, .enter .ico * { stroke-width: 2.3; }
-.enter:active { background: var(--line); }
+.enter .ico { width: 1.05em; height: 1.05em; }
+.enter .ico, .enter .ico * { stroke-width: 2.1; }
+.enter:active { opacity: .5; }
 .add { touch-action: manipulation; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
 .fav-mark { display: inline-flex; align-items: center; color: #d99a1c; }
 :root[data-theme="dark"] .fav-mark { color: #f0b840; }
