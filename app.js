@@ -786,7 +786,7 @@
           const task = taskOf(n.text);
           const sm = studyMap.get(n.id);   // pytania i etapy studium 3xZ mają kolor etapu
           return h('span', { class: 'text' + (task && task.done ? ' done' : '') + (sm ? (sm.stage ? ' stage' : ' q') + ' st-' + sm.k : '') },
-            depth === 0 && isStudyNode(n) ? h('span', { class: 'study-ico', 'aria-hidden': 'true' }, icon('book', '1.05em')) : null,   // ikona książki przy każdym studium
+            depth === 0 && isStudyNode(n) && studyInfo(n) ? h('span', { class: 'study-ico', 'aria-hidden': 'true' }, icon('book', '1.05em')) : null,   // ikona książki tylko przy studiach ze struktury 3xZ
             task ? h('button', {
               class: 'cb' + (task.done ? ' on' : ''), type: 'button', role: 'checkbox', 'aria-checked': String(task.done),
               'aria-label': task.done ? 'Zadanie wykonane — odznacz' : 'Zadanie do zrobienia — zaznacz',
