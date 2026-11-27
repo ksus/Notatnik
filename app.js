@@ -4,7 +4,7 @@
   /* ================= Stałe i stan ================= */
   const KEY_NOTES = 'drzewko.notes.v1';
   const KEY_SETTINGS = 'drzewko.settings.v1';
-  const DEFAULT_SETTINGS = { theme: 'system', fontSize: 17, exportStyle: 'dashes', autoNest: true, keepAwake: false, studiesCollapsed: false, bkSince: 0, lastExternalBackup: 0, lastFileBackup: 0, bkRemindedAt: 0, bkRemindDays: 0 };
+  const DEFAULT_SETTINGS = { theme: 'system', fontSize: 17, exportStyle: 'dashes', autoNest: true, keepAwake: false, studiesCollapsed: false, notesCollapsed: false, bkSince: 0, lastExternalBackup: 0, lastFileBackup: 0, bkRemindedAt: 0, bkRemindDays: 0 };
   const FS_MIN = 13;
   const FS_MAX = 26;
 
@@ -222,6 +222,7 @@
     state.settings.autoNest = state.settings.autoNest !== false;
     state.settings.keepAwake = state.settings.keepAwake === true;
     state.settings.studiesCollapsed = state.settings.studiesCollapsed === true;
+    state.settings.notesCollapsed = state.settings.notesCollapsed === true;
   }
 
   function saveNotes() {
@@ -626,23 +627,25 @@
     updateComposer();
   }
 
-  // Ekran główny: zwykłe notatki, a pod nimi zwijana grupa „Studia Biblii” (notatki z tagiem #studium)
+  // Ekran główny: dwie zwijane grupy — „Notatki” i „Studia Biblii” (notatki z tagiem #studium).
+  // Gdy istnieje tylko jedna grupa, nagłówka nie pokazujemy.
   function buildGroups(build) {
     const roots = viewRoots(), notes = roots.filter((n) => !isStudyNode(n)), studies = roots.filter(isStudyNode);
     const wrap = h('div', { class: 'groups' });
-    if (notes.length) {
-      const ul = build(notes, 0, false); ul.dataset.group = 'notes';
-      if (studies.length) wrap.append(h('div', { class: 'group-label' }, 'Notatki'));
-      wrap.append(ul);
-    }
-    if (studies.length) {
-      const open = !state.settings.studiesCollapsed;
+    const both = notes.length > 0 && studies.length > 0;
+    const group = (key, title, items, flag) => {
+      if (!items.length) return;
+      if (!both) { const ul = build(items, 0, false); ul.dataset.group = key; wrap.append(ul); return; }
+      const open = !state.settings[flag];
       const head = h('button', { class: 'group-head' + (open ? ' open' : ''), type: 'button', 'aria-expanded': String(open),
-        onclick: () => { state.settings.studiesCollapsed = open; saveSettings(); render(); } },
-        icon('chev'), h('span', {}, 'Studia Biblii'), h('span', { class: 'group-count' }, String(studies.length)));
-      wrap.append(h('section', { class: 'group' }, head));
-      if (open) { const ul = build(studies, 0, false); ul.dataset.group = 'studies'; wrap.lastChild.append(ul); }
-    }
+        onclick: () => { state.settings[flag] = open; saveSettings(); render(); } },
+        icon('chev'), h('span', {}, title), h('span', { class: 'group-count' }, String(items.length)));
+      const sec = h('section', { class: 'group' }, head);
+      if (open) { const ul = build(items, 0, false); ul.dataset.group = key; sec.append(ul); }
+      wrap.append(sec);
+    };
+    group('notes', 'Notatki', notes, 'notesCollapsed');
+    group('studies', 'Studia Biblii', studies, 'studiesCollapsed');
     return wrap;
   }
 
