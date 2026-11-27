@@ -45,6 +45,8 @@
   const ICONS = {
     plus: '<path d="M12 5v14M5 12h14"/>',
     x: '<path d="M18 6 6 18M6 6l12 12"/>',
+    map: '<circle cx="5" cy="12" r="2.2"/><circle cx="19" cy="5.5" r="2.2"/><circle cx="19" cy="18.5" r="2.2"/><path d="M7.2 12h3.3c2 0 2.5-1 2.5-2.5v-1c0-1 .8-3 4-3M7.2 12h3.3c2 0 2.5 1 2.5 2.5v1c0 1 .8 3 4 3"/>',
+    fit: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
     search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
     settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
     star: '<path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.9l-5.2 2.8 1-5.9-4.3-4.1 5.9-.8z"/>',    chev: '<path d="m9 6 6 6-6 6"/>',
@@ -1883,6 +1885,62 @@ ${nodes.map(note).join('\n')}
     }
   }
 
+  /* ----- Podgląd mapy myśli w aplikacji (pełny ekran, zoom i przesuwanie palcami / kółkiem myszy) ----- */
+  let mapView = null;
+  const MV_LEVELS = [[1, '1'], [2, '2'], [3, '3'], [-1, 'Wszystko']];
+
+  function closeMapView() {
+    if (!mapView) return;
+    const { el, mm, onKey } = mapView;
+    window.removeEventListener('keydown', onKey, true);
+    try { mm && mm.destroy(); } catch (e) { /* ignoruj */ }
+    el.remove();
+    mapView = null;
+  }
+
+  async function openMapView() {
+    if (mapView) return;
+    const fo = focusActive();                       // w widoku wątku pokazujemy tylko bieżącą gałąź
+    const nodes = fo ? [fo.node] : activeRoots();
+    if (!nodes.length) { toast('Nie ma jeszcze czego pokazać.'); return; }
+    const tree = toMarkmapTree(nodes, '');
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('class', 'mv-svg');
+    let level = -1;
+    const lvlBtns = MV_LEVELS.map(([lv, label]) =>
+      h('button', { type: 'button', class: 'mv-lvl' + (lv === level ? ' on' : ''), 'aria-pressed': lv === level ? 'true' : 'false',
+        onclick: () => setLevel(lv) }, label));
+    const el = h('div', { class: 'mapview' + (document.documentElement.dataset.theme === 'dark' ? ' markmap-dark' : ''), role: 'dialog', 'aria-label': 'Mapa myśli' },
+      h('div', { class: 'mv-bar' },
+        h('b', { class: 'mv-title' }, fo ? plain(fo.node.text) : 'Mapa myśli'),
+        h('div', { class: 'mv-lvls', role: 'group', 'aria-label': 'Poziom rozwinięcia' }, h('span', { class: 'mv-lbl' }, 'Poziomy:'), ...lvlBtns),
+        h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Dopasuj do ekranu', title: 'Dopasuj do ekranu', onclick: () => mapView && mapView.mm && mapView.mm.fit() }, icon('fit')),
+        h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Zamknij mapę', title: 'Zamknij (Esc)', onclick: closeMapView }, icon('x'))),
+      svg);
+    const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeMapView(); } };
+    window.addEventListener('keydown', onKey, true);
+    document.body.append(el);
+    mapView = { el, mm: null, onKey };
+
+    async function setLevel(lv) {
+      level = lv;
+      lvlBtns.forEach((b, i) => { const on = MV_LEVELS[i][0] === lv; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); });
+      if (mapView && mapView.mm) { await mapView.mm.setData(JSON.parse(JSON.stringify(tree)), { initialExpandLevel: lv }); mapView && mapView.mm && mapView.mm.fit(); }
+    }
+
+    try {
+      await loadMarkmap();
+      if (!mapView || mapView.el !== el) return;     // zamknięto w trakcie ładowania
+      const mm = window.markmap.Markmap.create(svg, { ...MM_OPTS, autoFit: true, style: mmCss, initialExpandLevel: level }, JSON.parse(JSON.stringify(tree)));
+      mapView.mm = mm;
+    } catch (e) {
+      console.warn('Podgląd mapy', e);
+      closeMapView();
+      toast('Nie udało się wyświetlić mapy myśli.', { duration: 6000 });
+    }
+  }
+
   // trzy przyciski formatów (używane w ustawieniach i w oknie notatki)
   const mapButtons = (run) => h('div', { class: 'three' },
     ['svg', 'png', 'html'].map((f) =>
@@ -2035,6 +2093,7 @@ ${nodes.map(note).join('\n')}
 
       h('div', { class: 'section' },
         h('h3', {}, 'Mapa myśli'),
+        h('button', { class: 'btn primary', type: 'button', style: 'width:100%;margin-bottom:.5rem', onclick: () => { dlg.close(); openMapView(); } }, icon('map'), 'Podgląd mapy w aplikacji'),
         mapButtons((f) => exportMap(f)),
         h('p', { class: 'hint' }, 'Eksport całego notatnika jako mapa markmap: SVG (grafika wektorowa), PNG (obraz) albo HTML (interaktywna mapa z przybliżaniem, działa bez internetu). Pojedynczą notatkę lub gałąź wyeksportujesz w jej oknie. Mapa zawiera wszystkie gałęzie, także zwinięte, ale bez notatek z archiwum.')),
 
@@ -2099,6 +2158,8 @@ ${nodes.map(note).join('\n')}
     $('#btnArchive').append(icon('archive'), h('span', { class: 'badge', hidden: true }));
     $('#btnArchive').addEventListener('click', () => setView(isArch() ? 'main' : 'archive'));
     $('#btnSearch').append(icon('search'));
+    const btnMap = h('button', { id: 'btnMap', class: 'icon-btn', type: 'button', 'aria-label': 'Podgląd mapy myśli', title: 'Podgląd mapy myśli', onclick: openMapView }, icon('map'));
+    $('#btnSearch').before(btnMap);
     $('#btnSettings').append(icon('settings'));
     $('#btnSettings').addEventListener('click', openSettings);
     $('#btnSearch').addEventListener('click', () => {
