@@ -479,12 +479,7 @@ a.ext-link { color: var(--accent); text-decoration: underline; text-underline-of
 .text.st-zrozum { --stc: var(--c-zrozum); }
 .text.st-zastosuj { --stc: var(--c-zastosuj); }
 .text.stage { color: var(--stc); font-weight: 600; }
-.text.q { color: var(--stc); font-style: italic; }
-.q-mark {
-  display: inline-flex; align-items: center; justify-content: center; vertical-align: .08em;
-  width: 1.15em; height: 1.15em; margin-right: .4em; border: 1.5px solid currentColor; border-radius: 50%;
-  font-size: .72em; font-style: normal; font-weight: 700; line-height: 1;
-}
+.text.q { color: var(--stc); font-style: italic; border-left: 3px solid var(--stc); padding-left: .55rem; margin-left: -.2rem; }
 .study-stage:nth-child(1) .study-bar i { background: var(--c-zobacz); }
 .study-stage:nth-child(2) .study-bar i { background: var(--c-zrozum); }
 .study-stage:nth-child(3) .study-bar i { background: var(--c-zastosuj); }

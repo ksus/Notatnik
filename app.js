@@ -792,7 +792,6 @@
               onkeydown: (e) => e.stopPropagation(),
               onclick: (e) => { e.stopPropagation(); toggleTask(n.id); },
             }) : null,
-            sm && !sm.stage ? h('span', { class: 'q-mark', 'aria-hidden': 'true' }, '?') : null,
             renderInline(task ? task.rest : n.text));
         })(),
         h('span', { class: 'meta' },
