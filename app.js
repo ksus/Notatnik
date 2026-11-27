@@ -765,6 +765,7 @@
         })(),
         h('span', { class: 'meta' },
           depth === 0 ? n.tags.map((t) => h('span', { class: 'chip' }, '#' + t)) : null,
+          depth === 0 ? studyChip(n) : null,
           depth === 0 && n.fav ? h('span', { class: 'fav-mark', role: 'img', 'aria-label': 'Ulubione', title: 'Ulubione' }, icon('star', '1.1em', true)) : null,   // ★ w wierszu tagów, po tagach
           // licznik ukrytych podwęzłów jest tylko informacją (nie przycisk) — dotknięcie go nie blokuje przeciągania; rozwija strzałka po lewej
           !open && hasKids ? h('span', { class: 'count', title: 'Ukryte podwęzły', 'aria-label': countNodes(n.children) + ' ukrytych podwęzłów' }, '+' + countNodes(n.children)) : null,
@@ -1052,6 +1053,15 @@
     if (composerBusy) return;
     const input = $('#cInput');
     let raw = input.value;
+    const cmd = /^\/(3xz|studium|studia)\b\s*(.*)$/i.exec(raw.trim());   // /3xz Rz 8,28-30 → nowe studium; /studia → lista studiów
+    if (cmd) {
+      composerBusy = true;
+      try {
+        if (!cmd[2].trim()) { input.value = ''; fitComposer(); openStudies(); }
+        else if (await createStudy(cmd[2])) { input.value = ''; fitComposer(); }
+      } finally { composerBusy = false; }
+      return;
+    }
     if (hasVerseRef(raw)) { composerBusy = true; try { raw = await expandVerses(raw); } finally { composerBusy = false; } }
     const node = addNode(state.targetId, raw);
     if (!node) return;
@@ -1941,6 +1951,134 @@ ${nodes.map(note).join('\n')}
     }
   }
 
+  /* ================= Studium Biblii 3xZ (Zobacz – Zrozum – Zastosuj) =================
+     Studium to zwykła notatka główna z tagiem #studium i trzema podgałęziami: Zobacz, Zrozum, Zastosuj.
+     Nie ma osobnej struktury danych — działa z eksportem .md, wyszukiwaniem i mapą myśli. Postęp liczymy z odpowiedzi i zadań. */
+  const STUDY_TAG = 'studium';
+  const STUDY_TEMPLATE = {
+    Zobacz: ['Kto mówi i do kogo?', 'Kluczowe słowa i powtórzenia', 'Kontekst: co jest przed i po?'],
+    Zrozum: ['Co ten tekst znaczył dla pierwszych odbiorców?', 'Czego uczy o Bogu?', 'Miejsca paralelne (dopisz werset przez @)'],
+    Zastosuj: ['[ ] Co mam zmienić lub w co uwierzyć?', '[ ] Jedno konkretne działanie w tym tygodniu', 'Modlitwa'],
+  };
+  const STUDY_STAGES = Object.keys(STUDY_TEMPLATE);
+  const isVerseNode = (n) => /^(„|\[\d+\]\s)/.test(n.text);
+
+  // null, jeśli notatka nie jest studium 3xZ; inaczej postęp: pozycja jest „zrobiona”, gdy ma odpowiedź (podwęzeł) albo odhaczone zadanie
+  function studyInfo(root) {
+    if (!root.tags.includes(STUDY_TAG)) return null;
+    const stages = [];
+    for (const name of STUDY_STAGES) {
+      const node = root.children.find((c) => c.text.trim().toLowerCase() === name.toLowerCase());
+      if (!node) return null;
+      const items = node.children.filter((c) => !isVerseNode(c));
+      const done = items.filter((c) => { const t = taskOf(c.text); return t ? t.done : c.children.length > 0; }).length;
+      stages.push({ name, node, items, done, total: items.length });
+    }
+    const done = stages.reduce((a, x) => a + x.done, 0), total = stages.reduce((a, x) => a + x.total, 0);
+    const apply = stages[2];
+    const status = !done ? 'Nowe' : (apply.total && apply.done === apply.total ? 'Zastosowane' : 'W toku');
+    return { stages, done, total, status };
+  }
+
+  function studyChip(n) {
+    const si = studyInfo(n);
+    return si ? h('span', { class: 'chip study', title: 'Studium 3xZ: ' + si.stages.map((x) => `${x.name} ${x.done}/${x.total}`).join(', ') }, `3xZ ${si.done}/${si.total}`) : null;
+  }
+
+  // dłuższy tekst dzielimy na kilka notatek (limit długości notatki), po numerach wersetów
+  function splitVerseText(t, max = 1800) {
+    if (t.length <= max) return [t];
+    const out = []; let cur = '';
+    for (const piece of t.split(/ (?=\[\d+\] )/)) {
+      if (cur && (cur + ' ' + piece).length > max) { out.push(cur); cur = piece; } else cur = cur ? cur + ' ' + piece : piece;
+    }
+    if (cur) out.push(cur);
+    return out;
+  }
+
+  // ref: „Rz 8,28-30” (wstawi tekst UBG) albo dowolny temat; zwraca nową notatkę lub null
+  async function createStudy(ref) {
+    ref = String(ref).replace(/\s+/g, ' ').trim();
+    if (!ref) { toast('Wpisz fragment Pisma (np. Rz 8,28-30) albo temat studium.'); return null; }
+    let label = ref, verses = [];
+    if (hasVerseRef('@' + ref)) {
+      try { await ensureBible(); } catch (e) { toast('Nie udało się wczytać tekstu Biblii — studium powstanie bez tekstu wersetów.', { duration: 7000 }); }
+      if (bibleData) {
+        const m = new RegExp(VERSE_RE_SRC, 'u').exec('@' + ref);
+        const r = m && bibleLookup(m[1], m[2], m[3]);
+        if (!r) { toast(`Nie znaleziono fragmentu: ${ref}`, { duration: 6000 }); return null; }
+        const lm = /\(([^()]*) UBG\)$/.exec(r);
+        if (lm) label = lm[1];
+        verses = splitVerseText(r);
+      }
+    }
+    const root = makeNode(`Studium: ${label}`.slice(0, 200), [STUDY_TAG]);
+    for (const name of STUDY_STAGES) {
+      const st = makeNode(name);
+      if (name === 'Zobacz') for (const v of verses) st.children.push(makeNode(v));
+      for (const q of STUDY_TEMPLATE[name]) st.children.push(makeNode(q));
+      root.children.push(st);
+    }
+    state.roots.push(root);
+    saveNotes();
+    openStudy(root.id);
+    return root;
+  }
+
+  function openStudy(id) {
+    state.view = 'main';
+    state.filter.open = false; state.filter.q = ''; state.filter.tag = null; state.filter.fav = false;
+    const fi = $('#fInput'); if (fi) fi.value = '';
+    setFocus(id, 'nav-fwd');
+  }
+
+  function openStudies() {
+    const dlg = h('dialog', { class: 'sheet', 'aria-label': 'Studium Biblii' });
+    document.body.append(dlg);
+    const input = h('input', { type: 'text', placeholder: 'Np. Rz 8,28-30 lub temat', autocomplete: 'off', autocapitalize: 'sentences', enterkeyhint: 'go', maxlength: '120', 'aria-label': 'Fragment Pisma lub temat' });
+    const create = async () => { const n = await createStudy(input.value); if (n) dlg.close(); };
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); create(); } });
+    const dyn = h('div', {});
+
+    const fill = () => {
+      const studies = activeRoots().map((n) => ({ n, si: studyInfo(n) })).filter((x) => x.si);
+      const todo = [];
+      for (const { n, si } of studies) for (const c of si.stages[2].items) { const t = taskOf(c.text); if (t && !t.done) todo.push({ n, c, t }); }
+      dyn.replaceChildren(
+        h('div', { class: 'section' },
+          h('h3', {}, 'Moje studia'),
+          studies.length ? studies.map(({ n, si }) =>
+            h('button', { class: 'study-row', type: 'button', onclick: () => { dlg.close(); openStudy(n.id); } },
+              h('span', { class: 'study-top' }, h('b', {}, plain(n.text).replace(/^Studium:\s*/, '')), h('span', { class: 'study-status st-' + si.status }, si.status)),
+              h('span', { class: 'study-stages' }, si.stages.map((x) =>
+                h('span', { class: 'study-stage' },
+                  h('span', { class: 'study-bar' }, h('i', { style: `width:${x.total ? Math.round(100 * x.done / x.total) : 0}%` })),
+                  `${x.name} ${x.done}/${x.total}`)))))
+            : h('p', { class: 'hint' }, 'Brak studiów. Utwórz pierwsze powyżej.')),
+        h('div', { class: 'section' },
+          h('h3', {}, 'Do zastosowania'),
+          todo.length ? todo.map(({ n, c, t }) =>
+            h('label', { class: 'study-todo' },
+              h('input', { type: 'checkbox', onchange: () => { toggleTask(c.id); fill(); } }),
+              h('span', {}, renderInline(t.rest), h('small', {}, plain(n.text).replace(/^Studium:\s*/, '')))))
+            : h('p', { class: 'hint' }, 'Wszystkie zadania z etapu „Zastosuj” wykonane (albo nie ma jeszcze studiów).')));
+    };
+    fill();
+
+    dlg.append(h('div', { class: 'sheet-inner' },
+      h('div', { class: 'sheet-head' },
+        h('h2', {}, 'Studium Biblii (3xZ)'),
+        h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Zamknij', onclick: () => dlg.close() }, icon('x'))),
+      h('div', { class: 'section' },
+        h('h3', {}, 'Nowe studium'),
+        h('div', { class: 'study-new' }, input, h('button', { class: 'btn primary', type: 'button', onclick: create }, 'Utwórz')),
+        h('p', { class: 'hint' }, 'Zobacz (co mówi tekst) → Zrozum (co znaczy) → Zastosuj (co zmieniam). Przy wersetach tekst UBG wstawi się sam; pytania możesz dowolnie zmieniać.')),
+      dyn));
+    dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
+    dlg.addEventListener('close', () => { dlg.remove(); render(); });
+    dlg.showModal();
+  }
+
   // trzy przyciski formatów (używane w ustawieniach i w oknie notatki)
   const mapButtons = (run) => h('div', { class: 'three' },
     ['svg', 'png', 'html'].map((f) =>
@@ -2110,6 +2248,11 @@ ${nodes.map(note).join('\n')}
         h('p', { class: 'hint' }, 'Notatki są zapisane tylko w tej przeglądarce (na tym urządzeniu). Rób eksport od czasu do czasu — wyczyszczenie danych przeglądarki je usuwa (razem z automatycznymi kopiami).')),
 
       bkSection(dlg),
+
+      h('div', { class: 'section' },
+        h('h3', {}, 'Studium Biblii (3xZ)'),
+        h('button', { class: 'btn primary', type: 'button', style: 'width:100%', onclick: () => { dlg.close(); openStudies(); } }, 'Nowe studium i moje studia…'),
+        h('p', { class: 'hint' }, 'Metoda Zobacz – Zrozum – Zastosuj. Szablon tworzy gałąź z pytaniami i tekstem wersetów (UBG). Skrót: w polu dodawania wpisz /3xz Rz 8,28-30 (lub samo /studia).')),
 
       h('div', { class: 'section' },
         h('h3', {}, 'Wersety biblijne'),
