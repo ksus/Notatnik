@@ -471,3 +471,20 @@ a.ext-link { color: var(--accent); text-decoration: underline; text-underline-of
 .group-head .ico { transition: transform .15s ease; }
 .group-head.open .ico { transform: rotate(90deg); }
 .group-count { margin-left: auto; padding: .05rem .5rem; border-radius: 999px; background: var(--surface-2); font-size: .72rem; }
+
+/* ===== Kolory etapów 3xZ: pytania pod Zobacz / Zrozum / Zastosuj ===== */
+:root { --c-zobacz: #255c99; --c-zrozum: #a8630a; --c-zastosuj: #2c6b5a; }
+:root[data-theme="dark"] { --c-zobacz: #6eb5ff; --c-zrozum: #e6b35a; --c-zastosuj: #6fcf9f; }
+.text.st-zobacz { --stc: var(--c-zobacz); }
+.text.st-zrozum { --stc: var(--c-zrozum); }
+.text.st-zastosuj { --stc: var(--c-zastosuj); }
+.text.stage { color: var(--stc); font-weight: 600; }
+.text.q { color: var(--stc); font-style: italic; }
+.q-mark {
+  display: inline-flex; align-items: center; justify-content: center; vertical-align: .08em;
+  width: 1.15em; height: 1.15em; margin-right: .4em; border: 1.5px solid currentColor; border-radius: 50%;
+  font-size: .72em; font-style: normal; font-weight: 700; line-height: 1;
+}
+.study-stage:nth-child(1) .study-bar i { background: var(--c-zobacz); }
+.study-stage:nth-child(2) .study-bar i { background: var(--c-zrozum); }
+.study-stage:nth-child(3) .study-bar i { background: var(--c-zastosuj); }

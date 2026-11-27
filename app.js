@@ -593,6 +593,7 @@
     };
 
     const fo = filtering ? null : focusInfo();   // widok wątku (notatka + jej podgałęzie); wyszukiwanie zawsze obejmuje cały notatnik
+    refreshStudyMap();
     const grouped = !fo && !filtering && !isArch();
     const list = fo ? build(fo.node.children, fo.depth + 1, false) : grouped ? buildGroups(build) : build(viewRoots(), 0, false);
     if (fo) {
@@ -782,7 +783,8 @@
       },
         (() => {
           const task = taskOf(n.text);
-          return h('span', { class: 'text' + (task && task.done ? ' done' : '') },
+          const sm = studyMap.get(n.id);   // pytania i etapy studium 3xZ mają kolor etapu
+          return h('span', { class: 'text' + (task && task.done ? ' done' : '') + (sm ? (sm.stage ? ' stage' : ' q') + ' st-' + sm.k : '') },
             task ? h('button', {
               class: 'cb' + (task.done ? ' on' : ''), type: 'button', role: 'checkbox', 'aria-checked': String(task.done),
               'aria-label': task.done ? 'Zadanie wykonane — odznacz' : 'Zadanie do zrobienia — zaznacz',
@@ -790,6 +792,7 @@
               onkeydown: (e) => e.stopPropagation(),
               onclick: (e) => { e.stopPropagation(); toggleTask(n.id); },
             }) : null,
+            sm && !sm.stage ? h('span', { class: 'q-mark', 'aria-hidden': 'true' }, '?') : null,
             renderInline(task ? task.rest : n.text));
         })(),
         h('span', { class: 'meta' },
@@ -2007,6 +2010,21 @@ ${nodes.map(note).join('\n')}
     const apply = stages[2];
     const status = !done ? 'Nowe' : (apply.total && apply.done === apply.total ? 'Zastosowane' : 'W toku');
     return { stages, done, total, status };
+  }
+
+  // id węzła → { k: etap, stage: true } dla etapów (Zobacz / Zrozum / Zastosuj) oraz zwykłe pytania pod nimi — do kolorowania
+  let studyMap = new Map();
+  function refreshStudyMap() {
+    studyMap = new Map();
+    for (const r of state.roots) {
+      const si = isStudyNode(r) ? studyInfo(r) : null;
+      if (!si) continue;
+      for (const st of si.stages) {
+        const k = st.name.toLowerCase();
+        studyMap.set(st.node.id, { k, stage: true });
+        for (const c of st.items) studyMap.set(c.id, { k });
+      }
+    }
   }
 
   function studyChip(n) {
