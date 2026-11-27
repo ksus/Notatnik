@@ -4,7 +4,7 @@
   /* ================= Stałe i stan ================= */
   const KEY_NOTES = 'drzewko.notes.v1';
   const KEY_SETTINGS = 'drzewko.settings.v1';
-  const DEFAULT_SETTINGS = { theme: 'system', fontSize: 17, exportStyle: 'dashes', autoNest: true, bkSince: 0, lastExternalBackup: 0, lastFileBackup: 0, bkRemindedAt: 0, bkRemindDays: 0 };
+  const DEFAULT_SETTINGS = { theme: 'system', fontSize: 17, exportStyle: 'dashes', autoNest: true, keepAwake: false, bkSince: 0, lastExternalBackup: 0, lastFileBackup: 0, bkRemindedAt: 0, bkRemindDays: 0 };
   const FS_MIN = 13;
   const FS_MAX = 26;
 
@@ -214,6 +214,7 @@
     if (!['light', 'dark', 'system'].includes(state.settings.theme)) state.settings.theme = 'system';
     if (!['dashes', 'indent'].includes(state.settings.exportStyle)) state.settings.exportStyle = 'dashes';
     state.settings.autoNest = state.settings.autoNest !== false;
+    state.settings.keepAwake = state.settings.keepAwake === true;
   }
 
   function saveNotes() {
@@ -1950,6 +1951,23 @@ ${nodes.map(note).join('\n')}
     if (meta) meta.content = dark ? '#14161a' : '#faf8f4';
   }
 
+  /* Wyłączenie wygaszania ekranu (Screen Wake Lock API) */
+  let wakeLock = null;
+  const wakeSupported = 'wakeLock' in navigator;
+  async function updateWakeLock() {
+    if (!wakeSupported) return;
+    if (state.settings.keepAwake && !document.hidden) {
+      if (wakeLock) return;
+      try {
+        wakeLock = await navigator.wakeLock.request('screen');
+        wakeLock.addEventListener('release', () => { wakeLock = null; });
+      } catch (e) { wakeLock = null; /* np. tryb oszczędzania baterii — spróbujemy ponownie później */ }
+    } else if (wakeLock) {
+      try { await wakeLock.release(); } catch (e) { /* ignoruj */ }
+      wakeLock = null;
+    }
+  }
+
   function segmented(name, options, value, onChange) {
     const wrap = h('div', { class: 'seg', role: 'radiogroup' });
     for (const [val, label] of options) {
@@ -1993,6 +2011,14 @@ ${nodes.map(note).join('\n')}
           range,
           h('button', { class: 'btn small', type: 'button', 'aria-label': 'Większa czcionka', onclick: () => setFs(s.fontSize + 1) }, 'A+')),
         h('div', { class: 'preview' }, renderInline('Przykład: **pogrubienie**, *kursywa*, ~~przekreślenie~~, ==zakreślenie=='))),
+
+      h('div', { class: 'section' },
+        h('h3', {}, 'Ekran'),
+        h('label', { class: 'hint', style: 'display:flex;align-items:center;gap:.6rem;margin:0' },
+          h('input', { type: 'checkbox', checked: s.keepAwake ? '' : null, disabled: !wakeSupported, style: 'width:1.3rem;height:1.3rem;accent-color:var(--accent);flex:none',
+            onchange: (e) => { s.keepAwake = e.target.checked; saveSettings(); updateWakeLock(); } }),
+          'Nie wygaszaj ekranu podczas używania aplikacji'),
+        !wakeSupported ? h('p', { class: 'hint' }, 'Ta przeglądarka nie obsługuje blokowania wygaszania ekranu.') : null),
 
       h('div', { class: 'section' },
         h('h3', {}, 'Dodawanie'),
@@ -2066,6 +2092,9 @@ ${nodes.map(note).join('\n')}
     loadAll();
     applySettings();
     mqDark.addEventListener && mqDark.addEventListener('change', applySettings);
+    // blokada wygaszania znika po zminimalizowaniu aplikacji — przy powrocie zakładamy ją ponownie
+    document.addEventListener('visibilitychange', updateWakeLock);
+    updateWakeLock();
 
     $('#btnArchive').append(icon('archive'), h('span', { class: 'badge', hidden: true }));
     $('#btnArchive').addEventListener('click', () => setView(isArch() ? 'main' : 'archive'));
