@@ -4,7 +4,7 @@
   /* ================= Stałe i stan ================= */
   const KEY_NOTES = 'drzewko.notes.v1';
   const KEY_SETTINGS = 'drzewko.settings.v1';
-  const DEFAULT_SETTINGS = { theme: 'system', fontSize: 17, exportStyle: 'dashes', autoNest: true, keepAwake: false, bkSince: 0, lastExternalBackup: 0, lastFileBackup: 0, bkRemindedAt: 0, bkRemindDays: 0 };
+  const DEFAULT_SETTINGS = { theme: 'system', fontSize: 17, exportStyle: 'dashes', autoNest: true, keepAwake: false, studiesCollapsed: false, bkSince: 0, lastExternalBackup: 0, lastFileBackup: 0, bkRemindedAt: 0, bkRemindDays: 0 };
   const FS_MIN = 13;
   const FS_MAX = 26;
 
@@ -221,6 +221,7 @@
     if (!['dashes', 'indent'].includes(state.settings.exportStyle)) state.settings.exportStyle = 'dashes';
     state.settings.autoNest = state.settings.autoNest !== false;
     state.settings.keepAwake = state.settings.keepAwake === true;
+    state.settings.studiesCollapsed = state.settings.studiesCollapsed === true;
   }
 
   function saveNotes() {
@@ -436,6 +437,12 @@
   const isArch = () => state.view === 'archive';
   const activeRoots = () => state.roots.filter((n) => !n.archived);
   const viewRoots = () => state.roots.filter((n) => !!n.archived === isArch());
+  // notatki z tagiem #studium są na ekranie głównym w osobnej grupie (w pliku / eksporcie zostają na swoich miejscach)
+  const isStudyNode = (n) => n.tags.includes('studium');
+  const groupRoots = (ul) => {
+    const g = ul && ul.dataset && ul.dataset.group, v = viewRoots();
+    return g === 'studies' ? v.filter(isStudyNode) : g === 'notes' ? v.filter((n) => !isStudyNode(n)) : v;
+  };
 
   function addNode(parentId, raw) {
     const p = parseEntry(raw, !parentId); // tagi tylko w węzłach głównych
@@ -454,7 +461,7 @@
   // indeks sąsiada w danym kierunku (notatki główne: pomijamy te z drugiego widoku — archiwum / aktywne); -1 gdy brak
   function siblingIndex(l, dir) {
     let j = l.index + dir;
-    if (!l.parent) while (j >= 0 && j < l.list.length && !!l.list[j].archived !== !!l.node.archived) j += dir;
+    if (!l.parent) while (j >= 0 && j < l.list.length && (!!l.list[j].archived !== !!l.node.archived || (!isArch() && isStudyNode(l.list[j]) !== isStudyNode(l.node)))) j += dir;
     return j < 0 || j >= l.list.length ? -1 : j;
   }
   function moveNode(id, dir) {
@@ -585,7 +592,8 @@
     };
 
     const fo = filtering ? null : focusInfo();   // widok wątku (notatka + jej podgałęzie); wyszukiwanie zawsze obejmuje cały notatnik
-    const list = fo ? build(fo.node.children, fo.depth + 1, false) : build(viewRoots(), 0, false);
+    const grouped = !fo && !filtering && !isArch();
+    const list = fo ? build(fo.node.children, fo.depth + 1, false) : grouped ? buildGroups(build) : build(viewRoots(), 0, false);
     if (fo) {
       list.classList.add('focus-list');
       tree.replaceChildren(buildFocusHead(fo), list.children.length ? list
@@ -616,6 +624,26 @@
     renderChrome();
     renderFilterBar();
     updateComposer();
+  }
+
+  // Ekran główny: zwykłe notatki, a pod nimi zwijana grupa „Studia Biblii” (notatki z tagiem #studium)
+  function buildGroups(build) {
+    const roots = viewRoots(), notes = roots.filter((n) => !isStudyNode(n)), studies = roots.filter(isStudyNode);
+    const wrap = h('div', { class: 'groups' });
+    if (notes.length) {
+      const ul = build(notes, 0, false); ul.dataset.group = 'notes';
+      if (studies.length) wrap.append(h('div', { class: 'group-label' }, 'Notatki'));
+      wrap.append(ul);
+    }
+    if (studies.length) {
+      const open = !state.settings.studiesCollapsed;
+      const head = h('button', { class: 'group-head' + (open ? ' open' : ''), type: 'button', 'aria-expanded': String(open),
+        onclick: () => { state.settings.studiesCollapsed = open; saveSettings(); render(); } },
+        icon('chev'), h('span', {}, 'Studia Biblii'), h('span', { class: 'group-count' }, String(studies.length)));
+      wrap.append(h('section', { class: 'group' }, head));
+      if (open) { const ul = build(studies, 0, false); ul.dataset.group = 'studies'; wrap.lastChild.append(ul); }
+    }
+    return wrap;
   }
 
   // przycisk Archiwum (z licznikiem), pasek archiwum i widoczność paska dodawania
@@ -815,7 +843,7 @@
     const el = e.currentTarget, li = el.closest('li.node'), ul = li && li.parentElement;
     if (!ul) return;
     const isRoot = ul.classList.contains('root');   // podwęzły: kolejność tylko w obrębie rodzica, w lewo = usuń, bez archiwizacji
-    const reorder = isRoot ? allowReorder && ul.children.length === viewRoots().length      // główne: lista pełna (bez filtra)
+    const reorder = isRoot ? allowReorder && ul.children.length === groupRoots(ul).length   // główne: lista pełna (bez filtra), osobno w każdej grupie
       : !isArch() && !isFiltering() && ul.children.length > 1;                               // podwęzły: kolejność w obrębie jednego rodzica
     const pid = e.pointerId, x0 = e.clientX, y0 = e.clientY, mouse = e.pointerType === 'mouse';
     let x = x0, y = y0, timer = 0;
@@ -964,7 +992,7 @@
         saveNotes(); render(); flash(id);
       } else if (commit && to !== from) {
         // indeksy dotyczą widocznej listy; notatki z archiwum zostają na swoich miejscach w tablicy
-        const vis = activeRoots(), moved = vis[from], rest = vis.filter((x) => x !== moved);
+        const vis = groupRoots(ul), moved = vis[from], rest = vis.filter((x) => x !== moved);
         state.roots.splice(state.roots.indexOf(moved), 1);
         state.roots.splice(to < rest.length ? state.roots.indexOf(rest[to]) : state.roots.indexOf(rest[rest.length - 1]) + 1, 0, moved);
         saveNotes(); render(); flash(id);
@@ -2024,6 +2052,7 @@ ${nodes.map(note).join('\n')}
   }
 
   function openStudy(id) {
+    state.settings.studiesCollapsed = false; saveSettings();
     state.view = 'main';
     state.filter.open = false; state.filter.q = ''; state.filter.tag = null; state.filter.fav = false;
     const fi = $('#fInput'); if (fi) fi.value = '';
