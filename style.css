@@ -140,7 +140,7 @@ button.chip.on { background: var(--accent); color: var(--accent-ink); }
 /* wejście w notatkę (widok wątku) */
 .enter {
   flex: none; width: 1.9rem; height: 1.9rem; border-radius: 50%; margin: .2rem 0 0;
-  color: var(--accent); background: none;
+  color: var(--muted); background: none;
   display: inline-flex; align-items: center; justify-content: center;
 }
 .enter .ico { width: 1.05em; height: 1.05em; }
@@ -483,3 +483,6 @@ a.ext-link { color: var(--accent); text-decoration: underline; text-underline-of
 .study-stage:nth-child(1) .study-bar i { background: var(--c-zobacz); }
 .study-stage:nth-child(2) .study-bar i { background: var(--c-zrozum); }
 .study-stage:nth-child(3) .study-bar i { background: var(--c-zastosuj); }
+
+/* ikona książki przy notatkach głównych z tagiem #studium */
+.study-ico { display: inline-flex; vertical-align: -.2em; margin-right: .45rem; color: var(--accent); }
